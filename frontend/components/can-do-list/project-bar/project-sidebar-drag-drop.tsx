@@ -502,6 +502,7 @@ export default function ProjectSidebarWithDragDrop({
         onDelete={handleDeleteProject}
         isLoading={isLoading}
         projects={projects}
+        tasks={tasks}
       />
     </div>
   );

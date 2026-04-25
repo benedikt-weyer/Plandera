@@ -22,7 +22,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
-import { ProjectDecrypted } from '@/utils/api/types';
+import { CanDoItemDecrypted, ProjectDecrypted } from '@/utils/api/types';
 import { getAvailableParents, canMoveProject } from '@/utils/can-do-list/project-hierarchy';
 import { Trash2, ArrowLeft } from 'lucide-react';
 
@@ -57,6 +57,7 @@ interface EditProjectDialogProps {
   readonly onDelete: (id: string) => Promise<boolean>;
   readonly isLoading?: boolean;
   readonly projects?: ProjectDecrypted[];
+  readonly tasks?: CanDoItemDecrypted[];
 }
 
 type DialogMode = 'edit' | 'delete-confirm';
@@ -68,7 +69,8 @@ export default function EditProjectDialog({
   onSave,
   onDelete,
   isLoading = false,
-  projects = []
+  projects = [],
+  tasks = []
 }: EditProjectDialogProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -155,6 +157,23 @@ export default function EditProjectDialog({
   };
 
   if (!project) return null;
+
+  const taskCount = tasks.filter(task => task.project_id === project.id).length;
+  const childProjectCount = projects.filter(candidate => candidate.parent_id === project.id).length;
+
+  const taskWarning =
+    taskCount === 0
+      ? 'This project has no tasks.'
+      : taskCount === 1
+        ? 'The 1 task in this project will be deleted.'
+        : `All ${taskCount} tasks in this project will be deleted.`;
+
+  const childProjectWarning =
+    childProjectCount === 0
+      ? ''
+      : childProjectCount === 1
+        ? ' Its child project will be moved up one level.'
+        : ` Its ${childProjectCount} child projects will be moved up one level.`;
 
   return (
     <Dialog 
@@ -334,9 +353,8 @@ export default function EditProjectDialog({
             <DialogHeader>
               <DialogTitle>Delete Project</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete "{project.name}"? 
-                All tasks in this project will be moved to the Inbox.
-                This action cannot be undone.
+                Are you sure you want to delete "{project.name}"? {taskWarning}
+                {childProjectWarning} This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
 

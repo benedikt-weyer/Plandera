@@ -248,10 +248,7 @@ export class CanDoListPageService {
   /**
    * Delete a project and handle its tasks
    */
-  async deleteProjectWithTasks(
-    projectId: string,
-    moveTasksToProject?: string
-  ): Promise<string | undefined> {
+  async deleteProjectWithTasks(projectId: string): Promise<void> {
     try {
       // Get all projects and tasks
       const [allProjects, allTasks] = await Promise.all([
@@ -265,41 +262,17 @@ export class CanDoListPageService {
         throw new Error('Project not found');
       }
 
-      // Get all tasks in this project
+      // Delete all tasks assigned directly to this project before deleting it.
       const tasksInProject = allTasks.filter(task => task.project_id === projectId);
-      
-      let targetProjectId: string | undefined;
-      
-      // If there are tasks, we need to move them to another project
-      if (tasksInProject.length > 0) {
-        if (moveTasksToProject) {
-          targetProjectId = moveTasksToProject;
-        } else {
-          // Find a target project (prefer default, then first available)
-          const remainingProjects = allProjects.filter(proj => proj.id !== projectId);
-          
-          if (remainingProjects.length === 0) {
-            // No projects exist, tasks will go to inbox (undefined project_id)
-            targetProjectId = undefined;
-          } else {
-            // Move to the first available project
-            targetProjectId = remainingProjects[0].id;
-          }
-        }
-        
-        // Move all tasks to the target project
-        for (const task of tasksInProject) {
-          await this.taskService.moveTaskToProject(task.id, targetProjectId ?? null);
-        }
+      for (const task of tasksInProject) {
+        await this.taskService.deleteTask(task.id);
       }
       
       // Handle child projects
       await this.projectService.deleteProjectWithChildren(projectId, true);
-      
-      return targetProjectId;
     } catch (error) {
       console.error(`Failed to delete project with tasks ${projectId}:`, error);
-      throw new Error('Failed to delete project and move tasks');
+      throw new Error('Failed to delete project and its tasks');
     }
   }
 

@@ -390,6 +390,18 @@ function SchedulerPageContent() {
     if (!canDoListPageService) return false;
 
     try {
+      const tasksInProject = tasks.filter(task => task.project_id === id);
+
+      for (const task of tasksInProject) {
+        const linkedEvent = calendarEvents.find(event => event.task_id === task.id);
+        if (linkedEvent) {
+          const eventDeleted = await handleDeleteEvent(linkedEvent.id);
+          if (!eventDeleted) {
+            throw new Error('Failed to delete linked event');
+          }
+        }
+      }
+
       await canDoListPageService.deleteProjectWithTasks(id);
       
       // Refresh both projects and tasks
