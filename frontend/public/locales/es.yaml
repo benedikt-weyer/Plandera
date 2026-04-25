@@ -14,7 +14,7 @@ common:
   today: Hoy
   yes: Sí
   no: No
-  
+
 sidebar:
   projects: Proyectos
   addProject: Agregar proyecto
@@ -95,6 +95,8 @@ calendar:
   allDay: Todo el Día
   location: Ubicación
   noEvents: No hay eventos
+  week: Semana
+  month: Mes
   weekView: Vista Semanal
   monthView: Vista Mensual
   previousWeek: Semana Anterior
@@ -188,7 +190,7 @@ settings:
   dataDeletedSuccess: Todos sus datos han sido eliminados correctamente. Será redirigido al panel de control.
   failedToDelete: Error al eliminar datos
   pleaseTypeConfirmation: Por favor, escriba el texto de confirmación exacto
-  
+
   # Export section
   exportYourData: Exportar Sus Datos
   exportDesc: Exporte todas sus tareas, proyectos, calendarios y eventos. Elija su formato preferido y opciones de seguridad.
@@ -219,7 +221,7 @@ settings:
   pleaseEnterPassword: Por favor, ingrese una contraseña para el cifrado
   failedToExportData: "Error al exportar datos {format}"
   tasksSummary: "{tasks} tareas, {projects} proyectos, {calendars} calendarios, {events} eventos de calendario"
-  
+
   # Import section
   importYourData: Importar Sus Datos
   importDesc: Importe datos de una exportación anterior. Admite formatos cifrados y descifrados. Ejecute una prueba primero para obtener una vista previa de lo que se importará.
@@ -279,4 +281,3 @@ errors:
   notFound: No encontrado
   unauthorized: No autorizado
   serverError: Error del servidor
-

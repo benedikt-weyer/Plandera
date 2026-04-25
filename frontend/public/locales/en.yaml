@@ -14,7 +14,7 @@ common:
   today: Today
   yes: Yes
   no: No
-  
+
 sidebar:
   projects: Projects
   addProject: Add Project
@@ -95,6 +95,8 @@ calendar:
   allDay: All Day
   location: Location
   noEvents: No events
+  week: Week
+  month: Month
   weekView: Week View
   monthView: Month View
   previousWeek: Previous Week
@@ -188,7 +190,7 @@ settings:
   dataDeletedSuccess: All your data has been deleted successfully. You will be redirected to the dashboard.
   failedToDelete: Failed to delete data
   pleaseTypeConfirmation: Please type the exact confirmation text
-  
+
   # Export section
   exportYourData: Export Your Data
   exportDesc: Export all your tasks, projects, calendars, and events. Choose your preferred format and security options.
@@ -219,7 +221,7 @@ settings:
   pleaseEnterPassword: Please enter a password for encryption
   failedToExportData: "Failed to export {format} data"
   tasksSummary: "{tasks} tasks, {projects} projects, {calendars} calendars, {events} calendar events"
-  
+
   # Import section
   importYourData: Import Your Data
   importDesc: Import data from a previous export. Supports both encrypted and decrypted formats. Run a dry run first to preview what will be imported.
@@ -279,4 +281,3 @@ errors:
   notFound: Not found
   unauthorized: Unauthorized
   serverError: Server error
-
