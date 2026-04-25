@@ -6,9 +6,9 @@ pkgs.mkShell {
   buildInputs = with pkgs; [
     # Node.js and related tools for Next.js frontend
     nodejs_20
-    nodePackages.pnpm
-    nodePackages.typescript
-    nodePackages.typescript-language-server
+    pnpm
+    typescript
+    typescript-language-server
 
     # Rust toolchain for backend
     rustc
