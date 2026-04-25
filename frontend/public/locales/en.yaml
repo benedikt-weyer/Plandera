@@ -98,6 +98,8 @@ calendar:
   day: Day
   week: Week
   month: Month
+  chooseDayAction: Choose what you want to do with this day
+  goToDay: Go to Day
   weekView: Week View
   monthView: Month View
   previousWeek: Previous Week

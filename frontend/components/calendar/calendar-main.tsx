@@ -853,6 +853,32 @@ export function CalendarMain({
     [setCurrentWeek, setSelectedDate, weekStartsOn],
   );
 
+  const handleMonthGridAddEvent = useCallback(
+    (date: Date) => {
+      setSelectedDate(date);
+      openNewEventDialog(date, false);
+    },
+    [openNewEventDialog, setSelectedDate],
+  );
+
+  const handleMonthGridNavigateMobile = useCallback(
+    (date: Date) => {
+      setSelectedDate(date);
+      setCurrentWeek(startOfWeek(date, { weekStartsOn }));
+      setCalendarView("day");
+    },
+    [setSelectedDate, setCurrentWeek, setCalendarView, weekStartsOn],
+  );
+
+  const handleMonthGridNavigateDesktop = useCallback(
+    (date: Date) => {
+      setSelectedDate(date);
+      setCurrentWeek(startOfWeek(date, { weekStartsOn }));
+      setCalendarView("week");
+    },
+    [setSelectedDate, setCurrentWeek, setCalendarView, weekStartsOn],
+  );
+
   // Handle event selection from search
   const handleEventSearchSelect = useCallback(
     (eventId: string, eventStartTime: Date) => {
@@ -907,7 +933,8 @@ export function CalendarMain({
               events={eventsInCurrentMonth}
               calendars={calendarRenderData}
               openEditDialog={openEditDialog}
-              onDateSelect={handleDateSelect}
+              onAddEvent={handleMonthGridAddEvent}
+              onNavigateToDate={handleMonthGridNavigateMobile}
             />
           ) : calendarView === "day" ? (
             <CalendarDayAgenda
@@ -986,7 +1013,8 @@ export function CalendarMain({
                 events={eventsInCurrentMonth}
                 calendars={calendarRenderData}
                 openEditDialog={openEditDialog}
-                onDateSelect={handleDateSelect}
+                onAddEvent={handleMonthGridAddEvent}
+                onNavigateToDate={handleMonthGridNavigateDesktop}
               />
             ) : calendarView === "day" ? (
               <CalendarDayAgenda

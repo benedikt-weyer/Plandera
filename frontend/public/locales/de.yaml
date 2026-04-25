@@ -98,6 +98,8 @@ calendar:
   day: Tag
   week: Woche
   month: Monat
+  chooseDayAction: Wähle aus, was du mit diesem Tag machen möchtest
+  goToDay: Zu diesem Tag
   weekView: Wochenansicht
   monthView: Monatsansicht
   previousWeek: Vorherige Woche

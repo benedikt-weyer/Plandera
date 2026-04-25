@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -14,9 +14,15 @@ import {
   startOfWeek,
   subMilliseconds,
 } from "date-fns";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useWeekStartDay } from "@/stores/settings-store";
 import { useCalendar } from "@/stores/calendar-store";
-import { useDateLocale } from "@/utils/context/LanguageContext";
+import { useDateLocale, useTranslation } from "@/utils/context/LanguageContext";
 import { CalendarEvent } from "@/utils/calendar/calendar-types";
 
 interface CalendarMonthGridProps {
@@ -30,7 +36,8 @@ interface CalendarMonthGridProps {
     isVisible: boolean;
   }[];
   readonly openEditDialog: (event: CalendarEvent) => void;
-  readonly onDateSelect?: (date: Date) => void;
+  readonly onAddEvent?: (date: Date) => void;
+  readonly onNavigateToDate?: (date: Date) => void;
 }
 
 const MAX_VISIBLE_EVENTS = 3;
@@ -40,11 +47,14 @@ export function CalendarMonthGrid({
   events,
   calendars,
   openEditDialog,
-  onDateSelect,
+  onAddEvent,
+  onNavigateToDate,
 }: CalendarMonthGridProps) {
+  const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const weekStartsOn = useWeekStartDay();
   const highlightedEventId = useCalendar((state) => state.highlightedEventId);
+  const [activeDayKey, setActiveDayKey] = useState<string | null>(null);
 
   const { days, weekdayLabels, eventsByDay } = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
@@ -138,83 +148,135 @@ export function CalendarMonthGrid({
           const hiddenEventsCount = dayEvents.length - visibleEvents.length;
           const isCurrentMonth = isSameMonth(day, currentDate);
           return (
-            <div
+            <Popover
               key={dayKey}
-              onClick={() => onDateSelect?.(day)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onDateSelect?.(day);
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              className={[
-                "min-h-0 cursor-pointer border-b border-r p-2 text-left align-top transition-colors last:border-r-0",
-                isCurrentMonth
-                  ? "bg-background"
-                  : "bg-muted/25 text-muted-foreground",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-              ].join(" ")}
+              open={activeDayKey === dayKey}
+              onOpenChange={(open) => setActiveDayKey(open ? dayKey : null)}
             >
-              <div className="mb-2 flex items-center justify-between">
-                <span
+              <PopoverTrigger asChild>
+                <div
+                  onClick={() =>
+                    setActiveDayKey((current) =>
+                      current === dayKey ? null : dayKey,
+                    )
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setActiveDayKey((current) =>
+                        current === dayKey ? null : dayKey,
+                      );
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   className={[
-                    "inline-flex h-7 w-7 items-center justify-center rounded-full text-sm",
-                    isToday(day) ? "bg-primary text-primary-foreground" : "",
+                    "min-h-0 cursor-pointer border-b border-r p-2 text-left align-top transition-colors last:border-r-0",
+                    isCurrentMonth
+                      ? "bg-background"
+                      : "bg-muted/25 text-muted-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
                   ].join(" ")}
                 >
-                  {format(day, "d")}
-                </span>
-              </div>
-
-              <div className="space-y-1 overflow-hidden">
-                {visibleEvents.map((event) => {
-                  const showTime =
-                    !event.all_day &&
-                    isSameDay(new Date(event.start_time), day);
-
-                  return (
-                    <div
-                      key={`${event.id}-${dayKey}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={(eventClick) => {
-                        eventClick.stopPropagation();
-                        openEditDialog(event);
-                      }}
-                      onKeyDown={(eventKey) => {
-                        if (eventKey.key === "Enter" || eventKey.key === " ") {
-                          eventKey.preventDefault();
-                          openEditDialog(event);
-                        }
-                      }}
+                  <div className="mb-2 flex items-center justify-between">
+                    <span
                       className={[
-                        "flex h-6 items-center gap-1 rounded px-2 text-xs font-medium text-white",
-                        "truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
-                        isEventHighlighted(event)
-                          ? "ring-2 ring-primary ring-offset-1"
+                        "inline-flex h-7 w-7 items-center justify-center rounded-full text-sm",
+                        isToday(day)
+                          ? "bg-primary text-primary-foreground"
                           : "",
                       ].join(" ")}
-                      style={{ backgroundColor: getEventColor(event) }}
                     >
-                      {showTime && (
-                        <span className="shrink-0 text-[10px] font-semibold text-white/85">
-                          {format(new Date(event.start_time), "HH:mm")}
-                        </span>
-                      )}
-                      <span className="truncate">{event.title}</span>
-                    </div>
-                  );
-                })}
-
-                {hiddenEventsCount > 0 && (
-                  <div className="px-1 text-xs font-medium text-muted-foreground">
-                    +{hiddenEventsCount} more
+                      {format(day, "d")}
+                    </span>
                   </div>
-                )}
-              </div>
-            </div>
+
+                  <div className="space-y-1 overflow-hidden">
+                    {visibleEvents.map((event) => {
+                      const showTime =
+                        !event.all_day &&
+                        isSameDay(new Date(event.start_time), day);
+
+                      return (
+                        <div
+                          key={`${event.id}-${dayKey}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={(eventClick) => {
+                            eventClick.stopPropagation();
+                            setActiveDayKey(null);
+                            openEditDialog(event);
+                          }}
+                          onKeyDown={(eventKey) => {
+                            if (
+                              eventKey.key === "Enter" ||
+                              eventKey.key === " "
+                            ) {
+                              eventKey.preventDefault();
+                              setActiveDayKey(null);
+                              openEditDialog(event);
+                            }
+                          }}
+                          className={[
+                            "flex h-6 items-center gap-1 rounded px-2 text-xs font-medium text-white",
+                            "truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                            isEventHighlighted(event)
+                              ? "ring-2 ring-primary ring-offset-1"
+                              : "",
+                          ].join(" ")}
+                          style={{ backgroundColor: getEventColor(event) }}
+                        >
+                          {showTime && (
+                            <span className="shrink-0 text-[10px] font-semibold text-white/85">
+                              {format(new Date(event.start_time), "HH:mm")}
+                            </span>
+                          )}
+                          <span className="truncate">{event.title}</span>
+                        </div>
+                      );
+                    })}
+
+                    {hiddenEventsCount > 0 && (
+                      <div className="px-1 text-xs font-medium text-muted-foreground">
+                        +{hiddenEventsCount} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </PopoverTrigger>
+
+              <PopoverContent className="w-56 p-3" align="center">
+                <div className="mb-3">
+                  <div className="text-sm font-semibold">
+                    {format(day, "EEEE, MMMM d", { locale: dateLocale })}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {t("calendar.chooseDayAction")}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setActiveDayKey(null);
+                      onAddEvent?.(day);
+                    }}
+                  >
+                    {t("calendar.addEvent")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setActiveDayKey(null);
+                      onNavigateToDate?.(day);
+                    }}
+                  >
+                    {t("calendar.goToDay")}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           );
         })}
       </div>

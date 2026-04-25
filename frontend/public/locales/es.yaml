@@ -98,6 +98,8 @@ calendar:
   day: Día
   week: Semana
   month: Mes
+  chooseDayAction: Elige qué quieres hacer con este día
+  goToDay: Ir al día
   weekView: Vista Semanal
   monthView: Vista Mensual
   previousWeek: Semana Anterior
