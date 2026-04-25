@@ -8,6 +8,7 @@ import { getRecurrencePattern } from "@/utils/calendar/eventDataProcessing";
 import { calculateEventLayout } from "@/utils/calendar/calendar-render";
 
 interface CalendarDayAgendaProps {
+  readonly className?: string;
   readonly day: Date;
   readonly events: CalendarEvent[];
   readonly calendars?: {
@@ -23,6 +24,7 @@ interface CalendarDayAgendaProps {
 }
 
 export function CalendarDayAgenda({
+  className,
   day,
   events,
   calendars,
@@ -182,7 +184,7 @@ export function CalendarDayAgenda({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={`flex h-full flex-col ${className ?? ""}`}>
       <div
         className="mb-4 rounded-lg bg-muted/30 p-3 cursor-pointer"
         onClick={handleAllDayClick}

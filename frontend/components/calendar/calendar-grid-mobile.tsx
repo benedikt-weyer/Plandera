@@ -51,7 +51,10 @@ export function CalendarGridMobile({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-4 flex gap-1 overflow-x-auto pb-2" ref={scrollRef}>
+      <div
+        className="mb-4 flex flex-shrink-0 gap-1 overflow-x-auto pb-2"
+        ref={scrollRef}
+      >
         {days.map((day) => {
           const isSelected = isSameDay(day, selectedDay);
           const isToday = isSameDay(day, new Date());
@@ -105,6 +108,7 @@ export function CalendarGridMobile({
         openEditDialog={openEditDialog}
         openNewEventDialog={openNewEventDialog}
         showFloatingAddButton
+        className="min-h-0 flex-1"
       />
     </div>
   );
