@@ -56,6 +56,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DurationPresetPicker } from "./duration-preset-picker";
+import { PriorityPresetPicker } from "./priority-preset-picker";
 
 interface TaskListItemProps {
   readonly task: CanDoItemDecrypted;
@@ -239,6 +240,29 @@ export default function TaskListItem({
         task.project_id ?? undefined,
         task.impact ?? undefined,
         task.urgency ?? undefined,
+        task.due_date ? new Date(task.due_date) : undefined,
+        task.blocked_by ?? undefined,
+        task.my_day ?? undefined,
+        task.parent_task_id ?? undefined,
+      );
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleQuickPriorityUpdate = async (
+    impact?: number,
+    urgency?: number,
+  ) => {
+    setIsUpdating(true);
+    try {
+      await onUpdateTask(
+        task.id,
+        task.content,
+        task.duration_minutes ?? undefined,
+        task.project_id ?? undefined,
+        impact,
+        urgency,
         task.due_date ? new Date(task.due_date) : undefined,
         task.blocked_by ?? undefined,
         task.my_day ?? undefined,
@@ -636,6 +660,20 @@ export default function TaskListItem({
                   onClearDuration={() => handleQuickDurationUpdate(undefined)}
                 />
               </div>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <PriorityPresetPicker
+                  disabled={isUpdating}
+                  impact={task.impact ?? undefined}
+                  urgency={task.urgency ?? undefined}
+                  onSelectPriority={handleQuickPriorityUpdate}
+                  onClearPriority={() =>
+                    handleQuickPriorityUpdate(undefined, undefined)
+                  }
+                />
+              </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -801,6 +839,20 @@ export default function TaskListItem({
                     handleQuickDurationUpdate(minutes)
                   }
                   onClearDuration={() => handleQuickDurationUpdate(undefined)}
+                />
+              </div>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <PriorityPresetPicker
+                  disabled={isUpdating}
+                  impact={task.impact ?? undefined}
+                  urgency={task.urgency ?? undefined}
+                  onSelectPriority={handleQuickPriorityUpdate}
+                  onClearPriority={() =>
+                    handleQuickPriorityUpdate(undefined, undefined)
+                  }
                 />
               </div>
               {onScheduleTask && !isScheduled && (

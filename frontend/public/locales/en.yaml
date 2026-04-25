@@ -74,6 +74,14 @@ tasks:
   customDuration: Custom duration
   durationTimePicker: Duration time picker
   clearDuration: Clear duration
+  quickPriorityHelp: Set priority quickly with fast value buttons
+  clearPriority: Clear priority
+  separatePriority: Separate impact and urgency
+  separatePriorityHelp: Turn on to set impact and urgency independently
+  prioritySingleValue: Single value for both impact and urgency
+  impact: Impact
+  urgency: Urgency
+  currentPriorityValue: "Current priority: P{value}"
 
 projects:
   addProject: Add Project

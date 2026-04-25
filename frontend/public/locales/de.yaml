@@ -74,6 +74,14 @@ tasks:
   customDuration: Benutzerdefinierte Dauer
   durationTimePicker: Dauer-Zeitwähler
   clearDuration: Dauer entfernen
+  quickPriorityHelp: Lege Priorität schnell mit Wertetasten fest
+  clearPriority: Priorität entfernen
+  separatePriority: Auswirkung und Dringlichkeit getrennt
+  separatePriorityHelp: Aktivieren, um Auswirkung und Dringlichkeit separat zu setzen
+  prioritySingleValue: Ein Wert für Auswirkung und Dringlichkeit
+  impact: Auswirkung
+  urgency: Dringlichkeit
+  currentPriorityValue: "Aktuelle Priorität: P{value}"
 
 projects:
   addProject: Projekt hinzufügen
