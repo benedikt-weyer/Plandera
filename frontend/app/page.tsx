@@ -390,9 +390,21 @@ function SchedulerPageContent() {
     if (!canDoListPageService) return false;
 
     try {
-      const tasksInProject = tasks.filter(task => task.project_id === id);
+      const projectIdsToDelete = new Set<string>();
+      const collectProjectIds = (projectId: string) => {
+        projectIdsToDelete.add(projectId);
+        const childProjects = projects.filter(project => project.parent_id === projectId);
+        for (const childProject of childProjects) {
+          collectProjectIds(childProject.id);
+        }
+      };
+      collectProjectIds(id);
 
-      for (const task of tasksInProject) {
+      const tasksInProjectTree = tasks.filter(task =>
+        task.project_id ? projectIdsToDelete.has(task.project_id) : false
+      );
+
+      for (const task of tasksInProjectTree) {
         const linkedEvent = calendarEvents.find(event => event.task_id === task.id);
         if (linkedEvent) {
           const eventDeleted = await handleDeleteEvent(linkedEvent.id);

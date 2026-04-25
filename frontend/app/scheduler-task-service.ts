@@ -246,7 +246,8 @@ export class CanDoListPageService {
   }
 
   /**
-   * Delete a project and handle its tasks
+   * Delete a project subtree and handle its tasks.
+   * Projects are deleted leaf-first by repeatedly calling the single-project delete method.
    */
   async deleteProjectWithTasks(projectId: string): Promise<void> {
     try {
@@ -262,17 +263,40 @@ export class CanDoListPageService {
         throw new Error('Project not found');
       }
 
-      // Delete all tasks assigned directly to this project before deleting it.
-      const tasksInProject = allTasks.filter(task => task.project_id === projectId);
-      for (const task of tasksInProject) {
-        await this.taskService.deleteTask(task.id);
+      const childProjectsByParent = new Map<string, ProjectDecrypted[]>();
+      for (const project of allProjects) {
+        if (!project.parent_id) continue;
+        const siblings = childProjectsByParent.get(project.parent_id) ?? [];
+        siblings.push(project);
+        childProjectsByParent.set(project.parent_id, siblings);
       }
-      
-      // Handle child projects
-      await this.projectService.deleteProjectWithChildren(projectId, true);
+
+      const deletionOrder: ProjectDecrypted[] = [];
+      const collectDeletionOrder = (currentProjectId: string) => {
+        const childProjects = childProjectsByParent.get(currentProjectId) ?? [];
+        for (const childProject of childProjects) {
+          collectDeletionOrder(childProject.id);
+        }
+
+        const currentProject = allProjects.find(project => project.id === currentProjectId);
+        if (currentProject) {
+          deletionOrder.push(currentProject);
+        }
+      };
+
+      collectDeletionOrder(projectId);
+
+      for (const project of deletionOrder) {
+        const tasksInProject = allTasks.filter(task => task.project_id === project.id);
+        for (const task of tasksInProject) {
+          await this.taskService.deleteTask(task.id);
+        }
+
+        await this.projectService.deleteProject(project.id);
+      }
     } catch (error) {
       console.error(`Failed to delete project with tasks ${projectId}:`, error);
-      throw new Error('Failed to delete project and its tasks');
+      throw new Error('Failed to delete project tree and its tasks');
     }
   }
 

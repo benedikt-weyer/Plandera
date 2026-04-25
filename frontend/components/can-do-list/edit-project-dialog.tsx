@@ -158,22 +158,34 @@ export default function EditProjectDialog({
 
   if (!project) return null;
 
-  const taskCount = tasks.filter(task => task.project_id === project.id).length;
-  const childProjectCount = projects.filter(candidate => candidate.parent_id === project.id).length;
+  const descendantProjectIds = new Set<string>();
+  const collectDescendantProjectIds = (projectId: string) => {
+    descendantProjectIds.add(projectId);
+    const childProjects = projects.filter(candidate => candidate.parent_id === projectId);
+    for (const childProject of childProjects) {
+      collectDescendantProjectIds(childProject.id);
+    }
+  };
+  collectDescendantProjectIds(project.id);
+
+  const taskCount = tasks.filter(
+    task => task.project_id && descendantProjectIds.has(task.project_id)
+  ).length;
+  const descendantProjectCount = descendantProjectIds.size - 1;
 
   const taskWarning =
     taskCount === 0
-      ? 'This project has no tasks.'
+      ? 'No tasks in this project tree will be deleted.'
       : taskCount === 1
-        ? 'The 1 task in this project will be deleted.'
-        : `All ${taskCount} tasks in this project will be deleted.`;
+        ? 'The 1 task in this project tree will be deleted.'
+        : `All ${taskCount} tasks in this project tree will be deleted.`;
 
   const childProjectWarning =
-    childProjectCount === 0
+    descendantProjectCount === 0
       ? ''
-      : childProjectCount === 1
-        ? ' Its child project will be moved up one level.'
-        : ` Its ${childProjectCount} child projects will be moved up one level.`;
+      : descendantProjectCount === 1
+        ? ' Its child project will also be deleted.'
+        : ` Its ${descendantProjectCount} descendant projects will also be deleted.`;
 
   return (
     <Dialog 

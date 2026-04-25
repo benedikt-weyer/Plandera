@@ -223,50 +223,11 @@ export class ProjectService {
       }
       
       const childProjects = allProjects.filter(proj => proj.parent_id === projectId);
-      
-      if (operation === 'delete' && childProjects.length > 0) {
-        return { 
-          isValid: false, 
-          message: 'Cannot delete project with child projects',
-          childProjects 
-        };
-      }
-      
+
       return { isValid: true, childProjects };
     } catch (error) {
       console.error('Failed to validate project operation:', error);
       return { isValid: false, message: 'Failed to validate operation' };
-    }
-  }
-
-  /**
-   * Delete project with child projects (moves children to parent or root)
-   */
-  async deleteProjectWithChildren(
-    projectId: string,
-    moveChildrenToParent: boolean = true
-  ): Promise<void> {
-    try {
-      const allProjects = await this.getProjects();
-      const projectToDelete = allProjects.find(proj => proj.id === projectId);
-      
-      if (!projectToDelete) {
-        throw new Error('Project not found');
-      }
-
-      const childProjects = allProjects.filter(proj => proj.parent_id === projectId);
-      
-      // Move child projects
-      for (const childProject of childProjects) {
-        const newParentId = moveChildrenToParent ? projectToDelete.parent_id : undefined;
-        await this.updateProject(childProject.id, { parent_id: newParentId });
-      }
-      
-      // Delete the project
-      await this.deleteProject(projectId);
-    } catch (error) {
-      console.error(`Failed to delete project with children ${projectId}:`, error);
-      throw new Error('Failed to delete project and reorganize children');
     }
   }
 
