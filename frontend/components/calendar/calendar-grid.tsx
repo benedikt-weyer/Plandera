@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 
 import { format, isSameDay, differenceInMinutes } from 'date-fns';
+import { CalendarClock } from 'lucide-react';
 import { useDateLocale } from '@/utils/context/LanguageContext';
 import { useDroppable, useFlexyDND } from '@/lib/flexyDND';
 import type { DragData, DragPosition as FlexyDragPosition } from '@/lib/flexyDND';
@@ -1194,12 +1195,28 @@ export function CalendarGrid({
     const bgColor = calendarColor || defaultColor;
     const borderColor = calendarColor || defaultBorderColor;
     
+    const isTaskReservationSpace = Boolean(event.is_task_reservation_space);
+    
     // For group events, use transparent background with solid border
     const groupEventStyles = event.is_group_event ? {
-      backgroundColor: `${bgColor}20`, // Very transparent background
+      backgroundColor: isTaskReservationSpace
+        ? `${bgColor}18`
+        : `${bgColor}20`,
+      backgroundImage: isTaskReservationSpace
+        ? `repeating-linear-gradient(
+            135deg,
+            ${bgColor}10 0px,
+            ${bgColor}10 10px,
+            transparent 10px,
+            transparent 20px
+          )`
+        : undefined,
       borderWidth: '2px',
-      borderStyle: 'solid',
-      borderColor: borderColor, // Solid, non-transparent border
+      borderStyle: isTaskReservationSpace ? 'dashed' : 'solid',
+      borderColor: borderColor,
+      boxShadow: isTaskReservationSpace
+        ? `inset 0 0 0 1px ${bgColor}30`
+        : undefined,
     } : {};
     
     // Get child events if this is a group event
@@ -1280,12 +1297,16 @@ export function CalendarGrid({
           <div className="relative z-10 -mx-2 -mt-2 px-2 pt-2 pb-1 bg-white/80 dark:bg-gray-900/80 group-hover:bg-white/10 dark:group-hover:bg-gray-900/10 transition-colors">
             <div className="font-medium truncate flex items-center gap-1 text-gray-900 dark:text-gray-100 group-hover:opacity-10 transition-opacity">
               <span className="inline-flex items-center flex-shrink-0" style={{ color: borderColor }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="14" width="7" height="7"></rect>
-                  <rect x="3" y="14" width="7" height="7"></rect>
-                </svg>
+                {isTaskReservationSpace ? (
+                  <CalendarClock className="h-3.5 w-3.5" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                  </svg>
+                )}
               </span>
               <span className="truncate">{event.title}</span>
             </div>

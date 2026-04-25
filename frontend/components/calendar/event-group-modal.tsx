@@ -5,7 +5,7 @@ import { CalendarEvent, Calendar } from '@/utils/calendar/calendar-types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
-import { Edit, X } from 'lucide-react';
+import { CalendarClock, Edit, X } from 'lucide-react';
 
 interface EventGroupModalProps {
   readonly isOpen: boolean;
@@ -48,6 +48,7 @@ export function EventGroupModal({
   // Calculate values before useEffect (needed for dependency array)
   const calendar = groupEvent ? calendars.find(cal => cal.id === groupEvent.calendar_id) : null;
   const bgColor = calendar?.color || '#3b82f6';
+  const isTaskReservationSpace = Boolean(groupEvent?.is_task_reservation_space);
 
   // Calculate the time range for the group (with fallbacks for hook dependencies)
   const groupStart = groupEvent ? new Date(groupEvent.start_time) : new Date();
@@ -396,15 +397,32 @@ export function EventGroupModal({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div 
-                className="w-4 h-4 rounded"
-                style={{ backgroundColor: bgColor }}
-              />
-              <DialogTitle className="text-xl font-semibold">
-                {groupEvent.title}
-              </DialogTitle>
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-4 h-4 rounded"
+                  style={{ backgroundColor: bgColor }}
+                />
+                <DialogTitle className="text-xl font-semibold">
+                  {groupEvent.title}
+                </DialogTitle>
+              </div>
+              {isTaskReservationSpace ? (
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  Task Reservation Space
+                </div>
+              ) : (
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                  Event Group
+                </div>
+              )}
+              <div className="text-sm text-muted-foreground">
+                {isTaskReservationSpace
+                  ? 'Autoplan and manual scheduling can place task events into this reserved time block.'
+                  : 'This event group can contain other events and keeps them organized within the same time block.'}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -666,4 +684,3 @@ export function EventGroupModal({
     </Dialog>
   );
 }
-
