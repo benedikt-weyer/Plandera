@@ -58,6 +58,7 @@ interface WebSocketMessage {
 class RustBackendImpl implements BackendInterface {
   private baseUrl: string;
   private wsUrl: string;
+  private runtimeConfigPromise: Promise<void> = Promise.resolve();
   private ws: WebSocket | null = null;
   private authToken: string | null = null;
   private connectionId: string | null = null;
@@ -81,6 +82,14 @@ class RustBackendImpl implements BackendInterface {
   updateUrls(httpUrl: string, wsUrl: string): void {
     this.baseUrl = httpUrl;
     this.wsUrl = wsUrl;
+  }
+
+  setRuntimeConfigPromise(promise: Promise<void>): void {
+    this.runtimeConfigPromise = promise;
+  }
+
+  private async ensureRuntimeConfigReady(): Promise<void> {
+    await this.runtimeConfigPromise;
   }
 
   private restoreAuthToken(): void {
@@ -162,6 +171,8 @@ class RustBackendImpl implements BackendInterface {
     endpoint: string, 
     options: RequestInit = {}
   ): Promise<T> {
+    await this.ensureRuntimeConfigReady();
+
     const url = `${this.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -190,11 +201,13 @@ class RustBackendImpl implements BackendInterface {
     return response.json();
   }
 
-  private initWebSocket(): void {
+  private async initWebSocket(): Promise<void> {
     if (typeof window === 'undefined') {
       console.log('[RustBackend] Skipping WebSocket in SSR');
       return;
     }
+
+    await this.ensureRuntimeConfigReady();
 
     // Don't connect if we don't have an auth token
     if (!this.authToken) {

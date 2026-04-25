@@ -6,22 +6,51 @@
 import { initializeBackend } from './backend-interface';
 import RustBackendImpl from './rust-backend-impl';
 
-// Initialize immediately with defaults so getBackend() never throws.
-// The real URLs are fetched from /api/config at runtime (server-side env vars
-// prefixed with PUBLIC_ — not baked in at build time like NEXT_PUBLIC_).
-const rustBackend = new RustBackendImpl('http://localhost:3001', 'ws://localhost:3001');
+function getDefaultBackendUrls(): { httpUrl: string; wsUrl: string } {
+  if (typeof window === 'undefined') {
+    return {
+      httpUrl: 'http://localhost:3001',
+      wsUrl: 'ws://localhost:3001',
+    };
+  }
+
+  const { hostname, origin, protocol, host } = window.location;
+  const isLocalDevelopment =
+    hostname === 'localhost' || hostname === '127.0.0.1';
+
+  if (isLocalDevelopment) {
+    return {
+      httpUrl: 'http://localhost:3001',
+      wsUrl: 'ws://localhost:3001',
+    };
+  }
+
+  return {
+    httpUrl: origin,
+    wsUrl: `${protocol === 'https:' ? 'wss:' : 'ws:'}//${host}`,
+  };
+}
+
+// Initialize immediately with safe defaults so getBackend() never throws.
+// In production-like environments, default to the current origin instead of localhost.
+// Runtime config from /api/config can still override these values afterwards.
+const defaultUrls = getDefaultBackendUrls();
+const rustBackend = new RustBackendImpl(defaultUrls.httpUrl, defaultUrls.wsUrl);
 initializeBackend(rustBackend);
 
 // Fetch runtime config and update URLs before any user interaction occurs.
 if (typeof window !== 'undefined') {
-  fetch('/api/config')
+  const runtimeConfigPromise = fetch('/api/config')
     .then((res) => res.json())
     .then((config) => {
+      console.log('[init] Runtime config loaded:', config);
       rustBackend.updateUrls(config.backendHttpUrl, config.backendWsUrl);
     })
     .catch((err) => {
       console.warn('[init] Failed to fetch runtime config, using defaults:', err);
     });
+
+  rustBackend.setRuntimeConfigPromise(runtimeConfigPromise);
 }
 
 export { rustBackend };
