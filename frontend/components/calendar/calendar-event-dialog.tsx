@@ -55,6 +55,7 @@ export const eventFormSchema = z.object({
   daysOfWeek: z.array(z.number()).optional(),
   // Event group fields
   isGroupEvent: z.boolean().default(false),
+  isTaskReservationSpace: z.boolean().default(false),
   parentGroupEventId: z.string().optional(),
   // Task linkage
   taskId: z.string().optional()
@@ -116,6 +117,14 @@ export const eventFormSchema = z.object({
 }, {
   message: "Group events cannot be nested inside other groups",
   path: ["isGroupEvent"]
+}).refine(data => {
+  if (data.isTaskReservationSpace && !data.isGroupEvent) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Task reservation spaces must be event groups",
+  path: ["isTaskReservationSpace"]
 });
 
 export type EventFormValues = z.infer<typeof eventFormSchema>;
@@ -215,6 +224,7 @@ export function CalendarEventDialog({
         : '',
       recurrenceInterval: selectedEvent ? (getRecurrencePattern(selectedEvent)?.interval ?? 1) : 1,
       isGroupEvent: selectedEvent?.is_group_event ?? false,
+      isTaskReservationSpace: selectedEvent?.is_task_reservation_space ?? false,
       parentGroupEventId: selectedEvent?.parent_group_event_id ?? undefined
     }
   });
@@ -245,6 +255,7 @@ export function CalendarEventDialog({
         : '',
       recurrenceInterval: selectedEvent ? (getRecurrencePattern(selectedEvent)?.interval ?? 1) : 1,
       isGroupEvent: selectedEvent?.is_group_event ?? false,
+      isTaskReservationSpace: selectedEvent?.is_task_reservation_space ?? false,
       parentGroupEventId: selectedEvent?.parent_group_event_id ?? undefined
     });
   }, [selectedEvent, form, calendars, defaultCalendarId]);
@@ -384,6 +395,7 @@ export function CalendarEventDialog({
         startTime: combineDateAndTime(pendingModificationData.startDate, pendingModificationData.startTime || '00:00'),
         endTime: combineDateAndTime(pendingModificationData.endDate, pendingModificationData.endTime || '23:59'),
         isGroupEvent: pendingModificationData.isGroupEvent,
+        isTaskReservationSpace: pendingModificationData.isTaskReservationSpace,
         parentGroupEventId: pendingModificationData.parentGroupEventId,
         recurrenceFrequency: pendingModificationData.recurrenceFrequency,
         recurrenceEndDate: pendingModificationData.recurrenceEndDate,
@@ -404,6 +416,7 @@ export function CalendarEventDialog({
         startTime: combineDateAndTime(pendingModificationData.startDate, pendingModificationData.startTime || '00:00'),
         endTime: combineDateAndTime(pendingModificationData.endDate, pendingModificationData.endTime || '23:59'),
         isGroupEvent: pendingModificationData.isGroupEvent,
+        isTaskReservationSpace: pendingModificationData.isTaskReservationSpace,
         parentGroupEventId: pendingModificationData.parentGroupEventId,
         recurrenceFrequency: pendingModificationData.recurrenceFrequency,
         recurrenceEndDate: pendingModificationData.recurrenceEndDate,
@@ -424,6 +437,7 @@ export function CalendarEventDialog({
         startTime: combineDateAndTime(pendingModificationData.startDate, pendingModificationData.startTime || '00:00'),
         endTime: combineDateAndTime(pendingModificationData.endDate, pendingModificationData.endTime || '23:59'),
         isGroupEvent: pendingModificationData.isGroupEvent,
+        isTaskReservationSpace: pendingModificationData.isTaskReservationSpace,
         parentGroupEventId: pendingModificationData.parentGroupEventId,
         recurrenceFrequency: pendingModificationData.recurrenceFrequency,
         recurrenceEndDate: pendingModificationData.recurrenceEndDate,
@@ -780,9 +794,9 @@ export function CalendarEventDialog({
                 )}
                 
                 {/* Convert to Group Toggle */}
-                <FormField
-                  control={form.control}
-                  name="isGroupEvent"
+              <FormField
+                control={form.control}
+                name="isGroupEvent"
                   render={({ field }) => (
                     <FormItem>
                       <div 
@@ -793,6 +807,8 @@ export function CalendarEventDialog({
                           // If converting to group event, clear parent group
                           if (newValue) {
                             form.setValue('parentGroupEventId', undefined);
+                          } else {
+                            form.setValue('isTaskReservationSpace', false);
                           }
                         }}
                       >
@@ -811,6 +827,8 @@ export function CalendarEventDialog({
                               // If converting to group event, clear parent group
                               if (checked) {
                                 form.setValue('parentGroupEventId', undefined);
+                              } else {
+                                form.setValue('isTaskReservationSpace', false);
                               }
                             }}
                             checked={field.value}
@@ -820,6 +838,52 @@ export function CalendarEventDialog({
                       {field.value && (
                         <div className="text-xs text-muted-foreground mt-1 px-3">
                           This event can now contain other events. Drag events over this one to add them.
+                        </div>
+                      )}
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="isTaskReservationSpace"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div
+                        className="flex flex-row items-center justify-between w-full rounded-lg border bg-card p-3 shadow-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => {
+                          const nextValue = !field.value;
+                          field.onChange(nextValue);
+                          if (nextValue) {
+                            form.setValue('isGroupEvent', true);
+                            form.setValue('parentGroupEventId', undefined);
+                          }
+                        }}
+                      >
+                        <div className="flex flex-col gap-1">
+                          <FormLabel className="text-sm font-medium cursor-pointer select-none">
+                            {t('calendar.taskReservationSpace')}
+                          </FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            {t('calendar.taskReservationSpaceHelp')}
+                          </p>
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+                          <Checkbox
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked);
+                              if (checked) {
+                                form.setValue('isGroupEvent', true);
+                                form.setValue('parentGroupEventId', undefined);
+                              }
+                            }}
+                            checked={field.value}
+                          />
+                        </div>
+                      </div>
+                      {field.value && (
+                        <div className="text-xs text-muted-foreground mt-1 px-3">
+                          {t('calendar.taskReservationSpaceNote')}
                         </div>
                       )}
                     </FormItem>

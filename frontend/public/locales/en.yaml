@@ -82,6 +82,23 @@ tasks:
   impact: Impact
   urgency: Urgency
   currentPriorityValue: "Current priority: P{value}"
+  autoplanTasks: Autoplan Tasks
+  autoplanDialogDescription: "Preview and place tasks from {source} into future task reservation spaces."
+  autoplanMode: Auto mode
+  autoplanModeImportantFirst: Most important first
+  autoplanModeBestFit: Best fit
+  autoplanModeBalanced: Balanced
+  autoplanTaskCount: Tasks to plan
+  autoplanEligible: Eligible tasks
+  autoplanReservationSpaces: Reservation spaces
+  autoplanPlanned: Planned
+  autoplanUnplanned: Unplanned
+  autoplanPreview: Preview
+  autoplanNoReservationSpaces: No future task reservation spaces are available.
+  autoplanNoEligibleTasks: No eligible tasks are available for autoplaning.
+  autoplanNoAssignments: No tasks fit into the available reservation spaces with the selected mode.
+  autoplanRemainingTasks: Remaining tasks
+  applyAutoplan: Apply Autoplan
 
 projects:
   addProject: Add Project
@@ -159,6 +176,9 @@ calendar:
   searchEvents: Search events...
   noEventsFound: No events found
   myCalendars: My Calendars
+  taskReservationSpace: Task reservation space
+  taskReservationSpaceHelp: Mark this event group as a slot that autoplaning can fill with tasks
+  taskReservationSpaceNote: Tasks can be planned into this group after the current time. Reservation spaces must be event groups.
 
 settings:
   settings: Settings

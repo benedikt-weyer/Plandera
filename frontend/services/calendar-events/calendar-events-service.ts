@@ -67,6 +67,7 @@ export class CalendarEventsService {
     isAllDay?: boolean;
     recurrenceRule?: string;
     isGroupEvent?: boolean;
+    isTaskReservationSpace?: boolean;
     parentGroupEventId?: string;
     taskId?: string;
   }): Promise<CalendarEvent> {
@@ -85,6 +86,7 @@ export class CalendarEventsService {
         all_day: eventData.isAllDay || false,
         recurrence_rule: eventData.recurrenceRule,
         is_group_event: eventData.isGroupEvent,
+        is_task_reservation_space: eventData.isTaskReservationSpace,
         parent_group_event_id: eventData.parentGroupEventId,
         task_id: eventData.taskId,
       };
@@ -116,6 +118,7 @@ export class CalendarEventsService {
     recurrenceRule?: string;
     recurrenceException?: string[];
     isGroupEvent?: boolean;
+    isTaskReservationSpace?: boolean;
     parentGroupEventId?: string;
     taskId?: string;
   }): Promise<CalendarEvent> {
@@ -144,6 +147,9 @@ export class CalendarEventsService {
         ...(updates.recurrenceRule !== undefined && { recurrence_rule: updates.recurrenceRule }),
         ...(updates.recurrenceException && { recurrence_exception: updates.recurrenceException }),
         ...(updates.isGroupEvent !== undefined && { is_group_event: updates.isGroupEvent }),
+        ...(updates.isTaskReservationSpace !== undefined && {
+          is_task_reservation_space: updates.isTaskReservationSpace,
+        }),
         ...(updates.parentGroupEventId !== undefined && { parent_group_event_id: updates.parentGroupEventId }),
         ...(updates.taskId !== undefined && { task_id: updates.taskId }),
       };

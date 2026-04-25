@@ -52,6 +52,7 @@ export class SchedulerEventService {
         isAllDay: values.isAllDay,
         recurrenceRule: recurrenceRule,
         isGroupEvent: values.isGroupEvent,
+        isTaskReservationSpace: values.isTaskReservationSpace,
         parentGroupEventId: values.parentGroupEventId,
         taskId: values.taskId
       });
@@ -67,6 +68,7 @@ export class SchedulerEventService {
         isAllDay: values.isAllDay,
         recurrenceRule: recurrenceRule,
         isGroupEvent: values.isGroupEvent,
+        isTaskReservationSpace: values.isTaskReservationSpace,
         parentGroupEventId: values.parentGroupEventId,
         taskId: values.taskId
       });
@@ -169,6 +171,7 @@ export class SchedulerEventService {
     recurrenceRule?: string;
     recurrenceException?: string[];
     isGroupEvent?: boolean;
+    isTaskReservationSpace?: boolean;
     parentGroupEventId?: string;
     taskId?: string;
   }): Promise<CalendarEvent> {
@@ -275,4 +278,3 @@ export class SchedulerEventService {
     }
   }
 }
-

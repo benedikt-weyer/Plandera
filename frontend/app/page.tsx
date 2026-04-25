@@ -24,6 +24,7 @@ import { TaskDragPreview } from '@/components/calendar/TaskDragPreview';
 import { useTaskNavigation } from '@/stores/task-navigation-store';
 import { useCalendar } from '@/stores/calendar-store';
 import { useWeekStartDay } from '@/stores/settings-store';
+import { TaskAutoplanAssignment } from '@/utils/calendar/task-reservation-utils';
 
 
 function SchedulerPageContent() {
@@ -800,6 +801,8 @@ function SchedulerPageContent() {
             endTime: existingEvent.end_time,
             isAllDay: existingEvent.all_day ?? false,
             recurrenceRule: existingEvent.recurrence_rule ?? undefined,
+            isTaskReservationSpace:
+              existingEvent.is_task_reservation_space ?? false,
           }),
           taskId: task.id,
         },
@@ -830,6 +833,7 @@ function SchedulerPageContent() {
         recurrenceRule: updatedEvent.recurrence_rule,
         recurrenceException: updatedEvent.recurrence_exception,
         isGroupEvent: updatedEvent.is_group_event,
+        isTaskReservationSpace: updatedEvent.is_task_reservation_space,
         parentGroupEventId: updatedEvent.parent_group_event_id,
         taskId: updatedEvent.task_id,
       };
@@ -869,6 +873,7 @@ function SchedulerPageContent() {
                 recurrenceRule: childEvent.recurrence_rule,
                 recurrenceException: childEvent.recurrence_exception,
                 isGroupEvent: childEvent.is_group_event,
+                isTaskReservationSpace: childEvent.is_task_reservation_space,
                 parentGroupEventId: childEvent.parent_group_event_id,
                 taskId: childEvent.task_id,
               };
@@ -1258,6 +1263,49 @@ function SchedulerPageContent() {
     }
   };
 
+  const handleApplyAutoplan = useCallback(async (
+    assignments: TaskAutoplanAssignment[],
+  ): Promise<boolean> => {
+    if (!schedulerPageService || assignments.length === 0) {
+      return false;
+    }
+
+    try {
+      const createdEvents: CalendarEvent[] = [];
+
+      for (const assignment of assignments) {
+        const projectName = assignment.task.project_id
+          ? projects.find((project) => project.id === assignment.task.project_id)?.name
+          : undefined;
+
+        const event = await schedulerPageService.eventOps.calendarEventsService.createCalendarEvent({
+          title: assignment.task.content,
+          description: `Autoplanned task${projectName ? `\nProject: ${projectName}` : ''}`,
+          calendarId: assignment.groupEvent.calendar_id,
+          startTime: assignment.start,
+          endTime: assignment.end,
+          isAllDay: false,
+          isGroupEvent: false,
+          isTaskReservationSpace: false,
+          parentGroupEventId: assignment.groupEvent.id,
+          taskId: assignment.task.id,
+        });
+
+        createdEvents.push(event);
+      }
+
+      setCalendarEvents((prev) => [...prev, ...createdEvents]);
+      toast.success(
+        `Autoplanned ${createdEvents.length} ${createdEvents.length === 1 ? 'task' : 'tasks'}`,
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to autoplan tasks:', error);
+      toast.error('Failed to autoplan tasks');
+      return false;
+    }
+  }, [schedulerPageService, projects]);
+
   // Handle navigation from task to event
   const handleNavigateToEvent = (eventId: string) => {
     // Open the calendar if closed
@@ -1355,6 +1403,7 @@ function SchedulerPageContent() {
               loadProjects={wrappedLoadProjects}
               onNavigateToEvent={handleNavigateToEvent}
               onDeleteEvent={handleDeleteEventFromTask}
+              onApplyAutoplan={handleApplyAutoplan}
               containerClassName="flex w-full h-full"
             />
           </div>

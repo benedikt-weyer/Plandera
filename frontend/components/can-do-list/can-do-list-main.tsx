@@ -12,11 +12,12 @@ import { parseDueDateFromContent } from "@/utils/can-do-list/due-date-utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Search, X } from "lucide-react";
+import { Sparkles, Trash2, Search, X } from "lucide-react";
 import { TaskSearchInput } from "@/components/dashboard/shared/task-search-input";
 import { ScrollToTopButton } from "@/components/ui/scroll-to-top-button";
 import Fuse from "fuse.js";
 import { useTaskNavigation } from "@/stores/task-navigation-store";
+import { useTranslation } from "@/utils/context/LanguageContext";
 
 import ErrorDisplay from "./error-display";
 import AddTaskForm from "./add-task-form";
@@ -28,7 +29,9 @@ import AuthenticationRequired from "./authentication-required";
 import ProjectSidebarDynamic from "./project-bar/project-sidebar-dynamic";
 import ProjectSelectorMobile from "./project-selector-mobile";
 import TaskListItem from "./task-list-item";
+import { TaskAutoplanDialog } from "./task-autoplan-dialog";
 import { CanDoItemDecrypted, ProjectDecrypted } from "@/utils/api/types";
+import { TaskAutoplanAssignment } from "@/utils/calendar/task-reservation-utils";
 
 // Define schema for new task validation
 const addTaskSchema = z.object({
@@ -113,6 +116,7 @@ interface CanDoListMainProps {
   // Event handling
   onNavigateToEvent?: (eventId: string) => void;
   onDeleteEvent?: (eventId: string) => Promise<void>;
+  onApplyAutoplan?: (assignments: TaskAutoplanAssignment[]) => Promise<boolean>;
 }
 
 export default function CanDoListMain({
@@ -126,6 +130,7 @@ export default function CanDoListMain({
   calendarEvents = [],
   onNavigateToEvent,
   onDeleteEvent,
+  onApplyAutoplan,
 
   // Task methods
   handleAddTask,
@@ -150,6 +155,7 @@ export default function CanDoListMain({
   containerClassName,
 }: CanDoListMainProps) {
   const { error } = useError();
+  const { t } = useTranslation();
   const { navigateToTaskId, clearTaskNavigation } = useTaskNavigation();
 
   // Use persistent storage for can-do list state to remember user's last selection
@@ -180,6 +186,11 @@ export default function CanDoListMain({
   // Search query doesn't need to persist across sessions
   const [searchQuery, setSearchQuery] = useState("");
   const [isResizingProjectBar, setIsResizingProjectBar] = useState(false);
+  const [autoplanDialogOpen, setAutoplanDialogOpen] = useState(false);
+  const [autoplanSourceLabel, setAutoplanSourceLabel] = useState("");
+  const [autoplanSourceTasks, setAutoplanSourceTasks] = useState<
+    CanDoItemDecrypted[]
+  >([]);
 
   // Refs for scroll containers
   const mobileScrollRef = useRef<HTMLDivElement>(null);
@@ -218,6 +229,15 @@ export default function CanDoListMain({
   }, [isResizingProjectBar, setProjectSidebarWidth]);
 
   const isLoading = isLoadingTasks || isLoadingProjects;
+
+  const openAutoplanDialog = (
+    sourceLabel: string,
+    sourceTasks: CanDoItemDecrypted[],
+  ) => {
+    setAutoplanSourceLabel(sourceLabel);
+    setAutoplanSourceTasks(sourceTasks);
+    setAutoplanDialogOpen(true);
+  };
 
   // Initialize form with react-hook-form and zod validation
   const form = useForm<{ content: string }>({
@@ -696,17 +716,34 @@ export default function CanDoListMain({
 
                     {/* Add Task Form for Active Tab */}
                     {activeTab === "active" && (
-                      <AddTaskForm
-                        form={form}
-                        onSubmit={onSubmit}
-                        isLoading={isLoading}
-                        projects={projects.map((p) => ({
-                          id: p.id,
-                          name: p.name,
-                          color: p.color,
-                          parent_id: p.parent_id,
-                        }))}
-                      />
+                      <>
+                        <AddTaskForm
+                          form={form}
+                          onSubmit={onSubmit}
+                          isLoading={isLoading}
+                          projects={projects.map((p) => ({
+                            id: p.id,
+                            name: p.name,
+                            color: p.color,
+                            parent_id: p.parent_id,
+                          }))}
+                        />
+                        {isMyDaySelected && onApplyAutoplan ? (
+                          <div className="mb-4 flex justify-end">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                openAutoplanDialog("My Day", filteredTasks)
+                              }
+                            >
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              {t("tasks.autoplanTasks")}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </>
                     )}
 
                     {/* Bulk Delete Section for Completed Tab */}
@@ -766,6 +803,15 @@ export default function CanDoListMain({
                       calendarEvents={calendarEvents}
                       onNavigateToEvent={onNavigateToEvent}
                       onDeleteEvent={onDeleteEvent}
+                      onAutoplanTasks={
+                        onApplyAutoplan
+                          ? (recommendedTasks) =>
+                              openAutoplanDialog(
+                                "Recommended Tasks",
+                                recommendedTasks,
+                              )
+                          : undefined
+                      }
                     />
                   ) : (
                     // Show regular project/inbox view on mobile
@@ -1031,17 +1077,34 @@ export default function CanDoListMain({
 
                     {/* Add Task Form for Active Tab */}
                     {activeTab === "active" && (
-                      <AddTaskForm
-                        form={form}
-                        onSubmit={onSubmit}
-                        isLoading={isLoading}
-                        projects={projects.map((p) => ({
-                          id: p.id,
-                          name: p.name,
-                          color: p.color,
-                          parent_id: p.parent_id,
-                        }))}
-                      />
+                      <>
+                        <AddTaskForm
+                          form={form}
+                          onSubmit={onSubmit}
+                          isLoading={isLoading}
+                          projects={projects.map((p) => ({
+                            id: p.id,
+                            name: p.name,
+                            color: p.color,
+                            parent_id: p.parent_id,
+                          }))}
+                        />
+                        {isMyDaySelected && onApplyAutoplan ? (
+                          <div className="mb-4 flex justify-end">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                openAutoplanDialog("My Day", filteredTasks)
+                              }
+                            >
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              {t("tasks.autoplanTasks")}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </>
                     )}
 
                     {/* Bulk Delete Section for Completed Tab */}
@@ -1094,6 +1157,15 @@ export default function CanDoListMain({
                       calendarEvents={calendarEvents}
                       onNavigateToEvent={onNavigateToEvent}
                       onDeleteEvent={onDeleteEvent}
+                      onAutoplanTasks={
+                        onApplyAutoplan
+                          ? (recommendedTasks) =>
+                              openAutoplanDialog(
+                                "Recommended Tasks",
+                                recommendedTasks,
+                              )
+                          : undefined
+                      }
                     />
                   ) : (
                     // Show regular project/inbox view
@@ -1261,6 +1333,18 @@ export default function CanDoListMain({
           </div>
         </div>
       )}
+
+      {onApplyAutoplan ? (
+        <TaskAutoplanDialog
+          open={autoplanDialogOpen}
+          onOpenChange={setAutoplanDialogOpen}
+          sourceLabel={autoplanSourceLabel}
+          tasks={autoplanSourceTasks}
+          allTasks={tasks}
+          events={calendarEvents}
+          onApply={onApplyAutoplan}
+        />
+      ) : null}
     </>
   );
 }

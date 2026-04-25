@@ -82,6 +82,23 @@ tasks:
   impact: Impacto
   urgency: Urgencia
   currentPriorityValue: "Prioridad actual: P{value}"
+  autoplanTasks: Planificar tareas
+  autoplanDialogDescription: "Vista previa y planificación de tareas de {source} en futuros espacios de reserva de tareas."
+  autoplanMode: Modo automático
+  autoplanModeImportantFirst: Más importante primero
+  autoplanModeBestFit: Mejor ajuste
+  autoplanModeBalanced: Equilibrado
+  autoplanTaskCount: Tareas a planificar
+  autoplanEligible: Tareas elegibles
+  autoplanReservationSpaces: Espacios de reserva
+  autoplanPlanned: Planificadas
+  autoplanUnplanned: Sin planificar
+  autoplanPreview: Vista previa
+  autoplanNoReservationSpaces: No hay espacios de reserva de tareas futuros disponibles.
+  autoplanNoEligibleTasks: No hay tareas elegibles disponibles para la planificación automática.
+  autoplanNoAssignments: Ninguna tarea cabe en los espacios de reserva disponibles con el modo seleccionado.
+  autoplanRemainingTasks: Tareas restantes
+  applyAutoplan: Aplicar planificación
 
 projects:
   addProject: Añadir Proyecto
@@ -159,6 +176,9 @@ calendar:
   searchEvents: Buscar eventos...
   noEventsFound: No se encontraron eventos
   myCalendars: Mis Calendarios
+  taskReservationSpace: Espacio de reserva de tareas
+  taskReservationSpaceHelp: Marca este grupo de eventos como un espacio que la planificación automática puede llenar con tareas
+  taskReservationSpaceNote: Las tareas pueden planificarse dentro de este grupo después del momento actual. Los espacios de reserva deben ser grupos de eventos.
 
 settings:
   settings: Configuración

@@ -4,11 +4,13 @@ import { CanDoItemDecrypted, ProjectDecrypted } from '@/utils/api/types';
 import { getRecommendedTasks, getRecommendationReason, calculateRecommendationScore } from '@/utils/can-do-list/recommendation-utils';
 import { formatDueDate, getDueDateColorClass } from '@/utils/can-do-list/due-date-utils';
 import { calculatePriority, getUrgencyColorClass, getPriorityDisplayText } from '@/utils/can-do-list/priority-utils';
-import { Clock, Calendar, Zap, AlertTriangle, Star } from 'lucide-react';
+import { Clock, Calendar, Zap, AlertTriangle, Sparkles, Star } from 'lucide-react';
 import { cn } from '@/lib/shadcn-utils';
 import TaskListItem from './task-list-item';
 import Fuse from 'fuse.js';
 import { useMemo } from 'react';
+import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/utils/context/LanguageContext';
 
 interface RecommendedTaskListProps {
   tasks: CanDoItemDecrypted[];
@@ -24,6 +26,7 @@ interface RecommendedTaskListProps {
   calendarEvents?: any[];
   onNavigateToEvent?: (eventId: string) => void;
   onDeleteEvent?: (eventId: string) => Promise<void>;
+  onAutoplanTasks?: (tasks: CanDoItemDecrypted[]) => void;
 }
 
 export default function RecommendedTaskList({
@@ -39,8 +42,10 @@ export default function RecommendedTaskList({
   isTaskScheduled,
   calendarEvents = [],
   onNavigateToEvent,
-  onDeleteEvent
+  onDeleteEvent,
+  onAutoplanTasks,
 }: RecommendedTaskListProps) {
+  const { t } = useTranslation();
   // Configure Fuse.js for fuzzy search
   const fuseOptions = {
     keys: [
@@ -125,12 +130,25 @@ export default function RecommendedTaskList({
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <Star className="h-5 w-5 text-amber-500" />
-        <h2 className="text-lg font-semibold">Recommended Tasks</h2>
-        <span className="text-sm text-muted-foreground">
-          ({filteredRecommendedTasks.length} tasks)
-        </span>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Star className="h-5 w-5 text-amber-500" />
+          <h2 className="text-lg font-semibold">Recommended Tasks</h2>
+          <span className="text-sm text-muted-foreground">
+            ({filteredRecommendedTasks.length} tasks)
+          </span>
+        </div>
+        {onAutoplanTasks ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onAutoplanTasks(filteredRecommendedTasks)}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            {t("tasks.autoplanTasks")}
+          </Button>
+        ) : null}
       </div>
       
       <div className="text-sm text-muted-foreground mb-4">

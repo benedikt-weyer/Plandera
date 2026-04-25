@@ -278,6 +278,7 @@ export interface CalendarEventDecrypted {
   recurrence_rule?: string;
   recurrence_exception?: string[];
   is_group_event?: boolean;
+  is_task_reservation_space?: boolean;
   parent_group_event_id?: string;
   task_id?: string; // Link to a can-do list task
   created_at: string;
@@ -310,6 +311,7 @@ export interface CreateCalendarEventDecryptedRequest {
   calendar_id: string;
   recurrence_rule?: string;
   is_group_event?: boolean;
+  is_task_reservation_space?: boolean;
   parent_group_event_id?: string;
   task_id?: string;
 }
@@ -326,6 +328,7 @@ export interface UpdateCalendarEventDecryptedRequest {
   recurrence_rule?: string;
   recurrence_exception?: string[];
   is_group_event?: boolean;
+  is_task_reservation_space?: boolean;
   parent_group_event_id?: string;
   task_id?: string;
 }

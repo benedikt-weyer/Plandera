@@ -50,6 +50,7 @@ export interface EventFormValues {
   recurrenceInterval?: number;
   daysOfWeek?: number[];
   isGroupEvent?: boolean;
+  isTaskReservationSpace?: boolean;
   parentGroupEventId?: string;
   taskId?: string; // Link to a can-do list task
 }

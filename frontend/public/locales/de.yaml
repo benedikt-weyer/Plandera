@@ -82,6 +82,23 @@ tasks:
   impact: Auswirkung
   urgency: Dringlichkeit
   currentPriorityValue: "Aktuelle Priorität: P{value}"
+  autoplanTasks: Aufgaben auto-planen
+  autoplanDialogDescription: "Vorschau und Planung von Aufgaben aus {source} in zukünftige Aufgaben-Reservierungsbereiche."
+  autoplanMode: Automodus
+  autoplanModeImportantFirst: Wichtigste zuerst
+  autoplanModeBestFit: Beste Passform
+  autoplanModeBalanced: Ausgewogen
+  autoplanTaskCount: Zu planende Aufgaben
+  autoplanEligible: Geeignete Aufgaben
+  autoplanReservationSpaces: Reservierungsbereiche
+  autoplanPlanned: Geplant
+  autoplanUnplanned: Nicht geplant
+  autoplanPreview: Vorschau
+  autoplanNoReservationSpaces: Keine zukünftigen Aufgaben-Reservierungsbereiche verfügbar.
+  autoplanNoEligibleTasks: Keine geeigneten Aufgaben für die automatische Planung verfügbar.
+  autoplanNoAssignments: Mit dem gewählten Modus passt keine Aufgabe in die verfügbaren Reservierungsbereiche.
+  autoplanRemainingTasks: Verbleibende Aufgaben
+  applyAutoplan: Auto-Planung anwenden
 
 projects:
   addProject: Projekt hinzufügen
@@ -159,6 +176,9 @@ calendar:
   searchEvents: Termine suchen...
   noEventsFound: Keine Termine gefunden
   myCalendars: Meine Kalender
+  taskReservationSpace: Aufgaben-Reservierungsbereich
+  taskReservationSpaceHelp: Markiere diese Termin-Gruppe als Bereich, den die Auto-Planung mit Aufgaben füllen darf
+  taskReservationSpaceNote: Aufgaben können nach der aktuellen Zeit in diese Gruppe eingeplant werden. Reservierungsbereiche müssen Termin-Gruppen sein.
 
 settings:
   settings: Einstellungen

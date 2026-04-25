@@ -154,6 +154,10 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       calendar_id: string;
       recurrence_rule?: string;
       recurrence_exception?: string[];
+      is_group_event?: boolean;
+      is_task_reservation_space?: boolean;
+      parent_group_event_id?: string;
+      task_id?: string;
     }>(encrypted);
 
     return {
@@ -512,6 +516,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
         calendar_id: request.calendar_id,
         recurrence_rule: request.recurrence_rule,
         is_group_event: request.is_group_event,
+        is_task_reservation_space: request.is_task_reservation_space,
         parent_group_event_id: request.parent_group_event_id,
         task_id: request.task_id,
       });
@@ -534,26 +539,38 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       let iv: string | undefined;
       let salt: string | undefined;
 
-      // Only encrypt if we have content to update
-      if (request.title !== undefined || request.description !== undefined || 
-          request.location !== undefined || request.start_time !== undefined ||
-          request.end_time !== undefined || request.all_day !== undefined ||
-          request.calendar_id !== undefined || request.recurrence_rule !== undefined ||
-          request.recurrence_exception !== undefined || request.is_group_event !== undefined ||
-          request.parent_group_event_id !== undefined || request.task_id !== undefined) {
+      const hasEncryptedFieldUpdate =
+        'title' in request || 'description' in request ||
+        'location' in request || 'start_time' in request ||
+        'end_time' in request || 'all_day' in request ||
+        'calendar_id' in request || 'recurrence_rule' in request ||
+        'recurrence_exception' in request || 'is_group_event' in request ||
+        'is_task_reservation_space' in request ||
+        'parent_group_event_id' in request || 'task_id' in request;
+
+      if (hasEncryptedFieldUpdate) {
+        const currentResponse = await this.backend.calendarEvents.getById(request.id);
+        if (!currentResponse.data) {
+          throw new Error('Calendar event not found');
+        }
+        const currentData = this.decryptCalendarEvent(currentResponse.data);
+
         const encrypted = this.encryptItemData({
-          title: request.title,
-          description: request.description,
-          location: request.location,
-          start_time: request.start_time,
-          end_time: request.end_time,
-          all_day: request.all_day,
-          calendar_id: request.calendar_id,
-          recurrence_rule: request.recurrence_rule,
-          recurrence_exception: request.recurrence_exception,
-          is_group_event: request.is_group_event,
-          parent_group_event_id: request.parent_group_event_id,
-          task_id: request.task_id,
+          title: 'title' in request ? request.title : currentData.title,
+          description: 'description' in request ? request.description : currentData.description,
+          location: 'location' in request ? request.location : currentData.location,
+          start_time: 'start_time' in request ? request.start_time : currentData.start_time,
+          end_time: 'end_time' in request ? request.end_time : currentData.end_time,
+          all_day: 'all_day' in request ? request.all_day : currentData.all_day,
+          calendar_id: 'calendar_id' in request ? request.calendar_id : currentData.calendar_id,
+          recurrence_rule: 'recurrence_rule' in request ? request.recurrence_rule : currentData.recurrence_rule,
+          recurrence_exception: 'recurrence_exception' in request ? request.recurrence_exception : currentData.recurrence_exception,
+          is_group_event: 'is_group_event' in request ? request.is_group_event : currentData.is_group_event,
+          is_task_reservation_space: 'is_task_reservation_space' in request
+            ? request.is_task_reservation_space
+            : currentData.is_task_reservation_space,
+          parent_group_event_id: 'parent_group_event_id' in request ? request.parent_group_event_id : currentData.parent_group_event_id,
+          task_id: 'task_id' in request ? request.task_id : currentData.task_id,
         });
         encryptedData = encrypted.encrypted_data;
         iv = encrypted.iv;
