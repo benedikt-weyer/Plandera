@@ -25,6 +25,7 @@ import { useTaskNavigation } from '@/stores/task-navigation-store';
 import { useCalendar } from '@/stores/calendar-store';
 import { useWeekStartDay } from '@/stores/settings-store';
 import { TaskAutoplanAssignment } from '@/utils/calendar/task-reservation-utils';
+import { AppLoadingScreen } from '@/components/app-loading-screen';
 
 
 function SchedulerPageContent() {
@@ -1333,14 +1334,7 @@ function SchedulerPageContent() {
   };
 
   if (isLoadingKey) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto mb-4"></div>
-          <p>Loading encryption key...</p>
-        </div>
-      </div>
-    );
+    return <AppLoadingScreen message="Loading encryption key..." className="z-40" />;
   }
 
   if (!encryptionKey) {

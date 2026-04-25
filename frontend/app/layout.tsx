@@ -1,18 +1,10 @@
-'use client';
-
-import HeaderAuth from "@/components/auth/header-auth";
-import { ThemeSwitcher } from "@/components/dashboard/theme-switcher";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
-import { Navbar } from "@/components/navbar";
-import { Toaster } from "@/components/ui/sonner";
 import { SchedulerNavProvider } from "@/contexts/scheduler-nav-context";
 import { SettingsInitializer } from "@/components/settings-initializer";
 import { LanguageProvider } from "@/utils/context/LanguageContext";
-
-// Initialize backend connection
-import "@/utils/api/init";
+import { AppBootstrap } from "@/components/app-bootstrap";
 
 const geistSans = Geist({
   display: "swap",
@@ -42,15 +34,8 @@ export default function RootLayout({
           <LanguageProvider>
             <SettingsInitializer>
               <SchedulerNavProvider>
-            <Navbar 
-              themeSwitcher={<ThemeSwitcher />}
-              authComponent={<HeaderAuth />}
-            />
-            <main className="flex flex-col gap-20 w-full items-center">
-              {children}
-            </main>
-          </SchedulerNavProvider>
-          <Toaster />
+                <AppBootstrap>{children}</AppBootstrap>
+              </SchedulerNavProvider>
             </SettingsInitializer>
           </LanguageProvider>
         </ThemeProvider>
