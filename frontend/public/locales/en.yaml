@@ -70,6 +70,10 @@ tasks:
   addSubtask: Add Subtask
   maxNestingReached: Maximum nesting level (3) reached
   cannotNestDeeper: Cannot create subtask - maximum nesting level reached
+  quickDurationHelp: Set a duration quickly with presets
+  customDuration: Custom duration
+  durationTimePicker: Duration time picker
+  clearDuration: Clear duration
 
 projects:
   addProject: Add Project

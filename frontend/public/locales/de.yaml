@@ -70,6 +70,10 @@ tasks:
   addSubtask: Unteraufgabe hinzufügen
   maxNestingReached: Maximale Verschachtelungsebene (3) erreicht
   cannotNestDeeper: Unteraufgabe kann nicht erstellt werden - maximale Verschachtelungsebene erreicht
+  quickDurationHelp: Lege schnell eine Dauer mit Vorgaben fest
+  customDuration: Benutzerdefinierte Dauer
+  durationTimePicker: Dauer-Zeitwähler
+  clearDuration: Dauer entfernen
 
 projects:
   addProject: Projekt hinzufügen

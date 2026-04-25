@@ -70,6 +70,10 @@ tasks:
   addSubtask: Agregar subtarea
   maxNestingReached: Nivel máximo de anidación (3) alcanzado
   cannotNestDeeper: No se puede crear subtarea - nivel máximo de anidación alcanzado
+  quickDurationHelp: Establece una duración rápidamente con valores predefinidos
+  customDuration: Duración personalizada
+  durationTimePicker: Selector de tiempo de duración
+  clearDuration: Borrar duración
 
 projects:
   addProject: Añadir Proyecto
