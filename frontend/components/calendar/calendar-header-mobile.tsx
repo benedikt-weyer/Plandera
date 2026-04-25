@@ -4,11 +4,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
+  addDays,
   addMonths,
   addWeeks,
   format,
   startOfMonth,
   startOfWeek,
+  subDays,
   subMonths,
   subWeeks,
 } from "date-fns";
@@ -69,7 +71,11 @@ export function CalendarHeaderMobile({
   const weekStartsOn = useWeekStartDay();
   const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
   const referenceDate =
-    currentView === "month" ? startOfMonth(selectedDate) : currentWeek;
+    currentView === "month"
+      ? startOfMonth(selectedDate)
+      : currentView === "day"
+        ? selectedDate
+        : currentWeek;
 
   const navigateToDate = (date: Date) => {
     const normalizedDate = currentView === "month" ? startOfMonth(date) : date;
@@ -79,6 +85,11 @@ export function CalendarHeaderMobile({
   };
 
   const goToPreviousPeriod = () => {
+    if (currentView === "day") {
+      navigateToDate(subDays(referenceDate, 1));
+      return;
+    }
+
     if (currentView === "month") {
       navigateToDate(subMonths(referenceDate, 1));
       return;
@@ -92,6 +103,11 @@ export function CalendarHeaderMobile({
   };
 
   const goToNextPeriod = () => {
+    if (currentView === "day") {
+      navigateToDate(addDays(referenceDate, 1));
+      return;
+    }
+
     if (currentView === "month") {
       navigateToDate(addMonths(referenceDate, 1));
       return;
@@ -176,7 +192,9 @@ export function CalendarHeaderMobile({
         <h2 className="text-lg font-medium">
           {currentView === "month"
             ? format(referenceDate, "MMM yyyy", { locale: dateLocale })
-            : `${format(currentWeek, "MMM yyyy", { locale: dateLocale })} - Week ${format(currentWeek, "w", { locale: dateLocale })}`}
+            : currentView === "day"
+              ? format(referenceDate, "EEE, MMM d", { locale: dateLocale })
+              : `${format(currentWeek, "MMM yyyy", { locale: dateLocale })} - Week ${format(currentWeek, "w", { locale: dateLocale })}`}
         </h2>
 
         {/* Calendar Settings Dropdown */}
@@ -250,6 +268,14 @@ export function CalendarHeaderMobile({
       </div>
 
       <ButtonGroup className="w-full">
+        <Button
+          size="sm"
+          className="flex-1"
+          variant={currentView === "day" ? "default" : "outline"}
+          onClick={() => setCurrentView("day")}
+        >
+          {t("calendar.day")}
+        </Button>
         <Button
           size="sm"
           className="flex-1"

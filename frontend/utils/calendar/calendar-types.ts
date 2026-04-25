@@ -21,7 +21,7 @@ export enum CalendarType {
   ICS = "ics",
 }
 
-export type CalendarView = "week" | "month";
+export type CalendarView = "day" | "week" | "month";
 
 export type Calendar = CalendarDecrypted;
 

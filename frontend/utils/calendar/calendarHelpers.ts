@@ -1,5 +1,6 @@
 import { CalendarEvent } from "@/utils/calendar/calendar-types";
 import {
+  filterEventsForDay,
   filterEventsForMonth,
   filterEventsForWeek,
 } from "@/utils/calendar/calendar";
@@ -30,6 +31,13 @@ export const getDaysOfWeek = (date: Date, weekStartsOn: 0 | 1 = 1): Date[] => {
   }
 
   return days;
+};
+
+export const getEventsInDay = (
+  events: CalendarEvent[],
+  currentDate: Date,
+): CalendarEvent[] => {
+  return filterEventsForDay(events, currentDate);
 };
 
 // Get events for the current week

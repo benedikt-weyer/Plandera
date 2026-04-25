@@ -1,11 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import {
+  addDays,
   addMonths,
   addWeeks,
   format,
   startOfMonth,
   startOfWeek,
+  subDays,
   subMonths,
   subWeeks,
 } from "date-fns";
@@ -44,7 +46,11 @@ export function CalendarHeader({
   const dateLocale = useDateLocale();
   const weekStartsOn = useWeekStartDay();
   const referenceDate =
-    currentView === "month" ? startOfMonth(selectedDate) : currentWeek;
+    currentView === "month"
+      ? startOfMonth(selectedDate)
+      : currentView === "day"
+        ? selectedDate
+        : currentWeek;
 
   const navigateToDate = (date: Date) => {
     const normalizedDate = currentView === "month" ? startOfMonth(date) : date;
@@ -54,6 +60,11 @@ export function CalendarHeader({
   };
 
   const goToPreviousPeriod = () => {
+    if (currentView === "day") {
+      navigateToDate(subDays(referenceDate, 1));
+      return;
+    }
+
     if (currentView === "month") {
       navigateToDate(subMonths(referenceDate, 1));
       return;
@@ -67,6 +78,11 @@ export function CalendarHeader({
   };
 
   const goToNextPeriod = () => {
+    if (currentView === "day") {
+      navigateToDate(addDays(referenceDate, 1));
+      return;
+    }
+
     if (currentView === "month") {
       navigateToDate(addMonths(referenceDate, 1));
       return;
@@ -121,11 +137,22 @@ export function CalendarHeader({
         <h2 className="text-lg font-medium">
           {currentView === "month"
             ? format(referenceDate, "MMMM yyyy", { locale: dateLocale })
-            : `${format(currentWeek, "MMMM yyyy", { locale: dateLocale })} - Week ${format(currentWeek, "w", { locale: dateLocale })}`}
+            : currentView === "day"
+              ? format(referenceDate, "EEEE, MMMM d, yyyy", {
+                  locale: dateLocale,
+                })
+              : `${format(currentWeek, "MMMM yyyy", { locale: dateLocale })} - Week ${format(currentWeek, "w", { locale: dateLocale })}`}
         </h2>
       </div>
       <div className="flex items-center gap-2">
         <ButtonGroup>
+          <Button
+            size="sm"
+            variant={currentView === "day" ? "default" : "outline"}
+            onClick={() => setCurrentView("day")}
+          >
+            {t("calendar.day")}
+          </Button>
           <Button
             size="sm"
             variant={currentView === "week" ? "default" : "outline"}

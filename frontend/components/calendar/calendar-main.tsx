@@ -10,6 +10,7 @@ import { CalendarSidebar } from "./calendar-sidebar";
 import { CalendarHeaderMobile } from "./calendar-header-mobile";
 import { useWeekStartDay } from "@/stores/settings-store";
 import { CalendarGridMobile } from "./calendar-grid-mobile";
+import { CalendarDayAgenda } from "./calendar-day-agenda";
 import { CalendarMonthGrid } from "./calendar-month-grid";
 import { useCalendar } from "@/stores/calendar-store";
 
@@ -20,6 +21,7 @@ import {
   RecurrenceFrequency,
 } from "@/utils/calendar/calendar-types";
 import {
+  getEventsInDay,
   getDaysOfWeek,
   getEventsInMonth,
   getEventsInWeek,
@@ -313,6 +315,20 @@ export function CalendarMain({
   const eventsInCurrentMonth = useMemo(() => {
     return getEventsInMonth(visibleEvents, selectedDate, weekStartsOn);
   }, [visibleEvents, selectedDate, weekStartsOn]);
+
+  const eventsInCurrentDay = useMemo(() => {
+    return getEventsInDay(visibleEvents, selectedDate);
+  }, [visibleEvents, selectedDate]);
+
+  const calendarRenderData = useMemo(
+    () =>
+      calendars.map((cal) => ({
+        ...cal,
+        color: cal.color || "#3b82f6",
+        isVisible: cal.is_visible,
+      })),
+    [calendars],
+  );
 
   // Memoize filtered visible calendars to avoid recalculating on each render
   const visibleCalendars = useMemo(
@@ -889,26 +905,28 @@ export function CalendarMain({
               currentDate={selectedDate}
               selectedDate={selectedDate}
               events={eventsInCurrentMonth}
-              calendars={calendars.map((cal) => ({
-                ...cal,
-                color: cal.color || "#3b82f6",
-                isVisible: cal.is_visible,
-              }))}
+              calendars={calendarRenderData}
               openEditDialog={openEditDialog}
               onDateSelect={handleDateSelect}
+            />
+          ) : calendarView === "day" ? (
+            <CalendarDayAgenda
+              day={selectedDate}
+              events={eventsInCurrentDay}
+              calendars={calendarRenderData}
+              openEditDialog={openEditDialog}
+              openNewEventDialog={openNewEventDialogWithDayHandler}
+              showFloatingAddButton
             />
           ) : (
             <CalendarGridMobile
               days={daysOfWeek}
+              selectedDate={selectedDate}
               events={eventsInCurrentWeek}
-              calendars={calendars.map((cal) => ({
-                ...cal,
-                color: cal.color || "#3b82f6",
-                isVisible: cal.is_visible,
-              }))}
+              calendars={calendarRenderData}
               openEditDialog={openEditDialog}
               openNewEventDialog={openNewEventDialogWithDayHandler}
-              onEventUpdate={handleEventUpdateWithRecurrenceCheck}
+              onDateSelect={handleDateSelect}
               shouldSelectToday={shouldSelectToday}
             />
           )}
@@ -966,23 +984,23 @@ export function CalendarMain({
                 currentDate={selectedDate}
                 selectedDate={selectedDate}
                 events={eventsInCurrentMonth}
-                calendars={calendars.map((cal) => ({
-                  ...cal,
-                  color: cal.color || "#3b82f6",
-                  isVisible: cal.is_visible,
-                }))}
+                calendars={calendarRenderData}
                 openEditDialog={openEditDialog}
                 onDateSelect={handleDateSelect}
+              />
+            ) : calendarView === "day" ? (
+              <CalendarDayAgenda
+                day={selectedDate}
+                events={eventsInCurrentDay}
+                calendars={calendarRenderData}
+                openEditDialog={openEditDialog}
+                openNewEventDialog={openNewEventDialogWithDayHandler}
               />
             ) : (
               <CalendarGrid
                 days={daysOfWeek}
                 events={eventsInCurrentWeek}
-                calendars={calendars.map((cal) => ({
-                  ...cal,
-                  color: cal.color || "#3b82f6",
-                  isVisible: cal.is_visible,
-                }))}
+                calendars={calendarRenderData}
                 openEditDialog={openEditDialog}
                 openNewEventDialog={openNewEventDialogWithDayHandler}
                 onEventUpdate={handleEventUpdateWithRecurrenceCheck}

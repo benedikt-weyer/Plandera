@@ -1,4 +1,5 @@
 import {
+  endOfDay,
   format,
   parse,
   isValid,
@@ -13,6 +14,7 @@ import {
   addYears,
   getDay,
   startOfMonth,
+  startOfDay,
   startOfWeek,
 } from "date-fns";
 import {
@@ -44,66 +46,13 @@ export const getDaysOfWeek = (currentWeek: Date, weekStartsOn: 0 | 1 = 1) => {
   });
 };
 
-// Filter events for the current week
-export const filterEventsForWeek = (
+const filterEventsForRange = (
   events: CalendarEvent[],
-  currentWeek: Date,
-  weekStartsOn: 0 | 1 = 1,
+  rangeStart: Date,
+  rangeEnd: Date,
 ) => {
   if (!events.length) return [];
-
-  const weekStart = currentWeek;
-  const weekEnd = endOfWeek(currentWeek, { weekStartsOn });
-
-  // Get all events and their recurring instances that fall within this week
-  const allEventsForWeek: CalendarEvent[] = [];
-
-  events.forEach((event) => {
-    // Check if the original event is in the current week
-    const eventStartTime = new Date(event.start_time);
-    const eventEndTime = new Date(event.end_time);
-    const originalEventInWeek =
-      isWithinInterval(eventStartTime, { start: weekStart, end: weekEnd }) ||
-      isWithinInterval(eventEndTime, { start: weekStart, end: weekEnd }) ||
-      (eventStartTime < weekStart && eventEndTime > weekEnd);
-
-    if (originalEventInWeek) {
-      allEventsForWeek.push(event);
-    }
-
-    // If this is a recurring event, check for instances in the current week
-    const recurrencePattern = getRecurrencePattern(event);
-    if (
-      recurrencePattern &&
-      recurrencePattern.frequency !== RecurrenceFrequency.None
-    ) {
-      const recurrenceInstances = generateRecurrenceInstancesInRange(
-        event,
-        weekStart,
-        weekEnd,
-        recurrencePattern,
-      );
-
-      allEventsForWeek.push(...recurrenceInstances);
-    }
-  });
-
-  return allEventsForWeek;
-};
-
-export const filterEventsForMonth = (
-  events: CalendarEvent[],
-  currentDate: Date,
-  weekStartsOn: 0 | 1 = 1,
-) => {
-  if (!events.length) return [];
-
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  const rangeStart = startOfWeek(monthStart, { weekStartsOn });
-  const rangeEnd = endOfWeek(monthEnd, { weekStartsOn });
-
-  const allEventsForMonth: CalendarEvent[] = [];
+  const allEventsForRange: CalendarEvent[] = [];
 
   events.forEach((event) => {
     const eventStartTime = new Date(event.start_time);
@@ -114,7 +63,7 @@ export const filterEventsForMonth = (
       (eventStartTime < rangeStart && eventEndTime > rangeEnd);
 
     if (originalEventInRange) {
-      allEventsForMonth.push(event);
+      allEventsForRange.push(event);
     }
 
     const recurrencePattern = getRecurrencePattern(event);
@@ -129,11 +78,43 @@ export const filterEventsForMonth = (
         recurrencePattern,
       );
 
-      allEventsForMonth.push(...recurrenceInstances);
+      allEventsForRange.push(...recurrenceInstances);
     }
   });
 
-  return allEventsForMonth;
+  return allEventsForRange;
+};
+
+export const filterEventsForDay = (
+  events: CalendarEvent[],
+  currentDate: Date,
+) => {
+  const rangeStart = startOfDay(currentDate);
+  const rangeEnd = endOfDay(currentDate);
+  return filterEventsForRange(events, rangeStart, rangeEnd);
+};
+
+// Filter events for the current week
+export const filterEventsForWeek = (
+  events: CalendarEvent[],
+  currentWeek: Date,
+  weekStartsOn: 0 | 1 = 1,
+) => {
+  const weekStart = currentWeek;
+  const weekEnd = endOfWeek(currentWeek, { weekStartsOn });
+  return filterEventsForRange(events, weekStart, weekEnd);
+};
+
+export const filterEventsForMonth = (
+  events: CalendarEvent[],
+  currentDate: Date,
+  weekStartsOn: 0 | 1 = 1,
+) => {
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const rangeStart = startOfWeek(monthStart, { weekStartsOn });
+  const rangeEnd = endOfWeek(monthEnd, { weekStartsOn });
+  return filterEventsForRange(events, rangeStart, rangeEnd);
 };
 
 /**

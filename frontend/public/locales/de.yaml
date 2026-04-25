@@ -95,6 +95,7 @@ calendar:
   allDay: Ganztägig
   location: Ort
   noEvents: Keine Termine
+  day: Tag
   week: Woche
   month: Monat
   weekView: Wochenansicht

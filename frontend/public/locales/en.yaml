@@ -95,6 +95,7 @@ calendar:
   allDay: All Day
   location: Location
   noEvents: No events
+  day: Day
   week: Week
   month: Month
   weekView: Week View

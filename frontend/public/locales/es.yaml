@@ -95,6 +95,7 @@ calendar:
   allDay: Todo el Día
   location: Ubicación
   noEvents: No hay eventos
+  day: Día
   week: Semana
   month: Mes
   weekView: Vista Semanal
