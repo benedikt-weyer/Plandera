@@ -34,13 +34,22 @@ export function CalendarGridMobile({
 }: CalendarGridMobileProps) {
   const dateLocale = useDateLocale();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasHandledTodaySelectionRef = useRef(false);
 
   useEffect(() => {
-    if (!shouldSelectToday) return;
+    if (!shouldSelectToday) {
+      hasHandledTodaySelectionRef.current = false;
+      return;
+    }
+
+    if (hasHandledTodaySelectionRef.current) {
+      return;
+    }
 
     const today = new Date();
     const todayInWeek = days.find((day) => isSameDay(day, today));
     if (todayInWeek) {
+      hasHandledTodaySelectionRef.current = true;
       onDateSelect?.(todayInWeek);
     }
   }, [days, onDateSelect, shouldSelectToday]);
