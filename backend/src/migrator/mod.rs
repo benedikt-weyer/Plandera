@@ -7,6 +7,7 @@ pub mod m20240101_000004_create_can_do_list_table;
 pub mod m20240101_000005_create_calendars_table;
 pub mod m20240101_000006_create_calendar_events_table;
 pub mod m20240101_000007_create_user_settings_table;
+pub mod m20240101_000008_create_countdowns_table;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240101_000005_create_calendars_table::Migration),
             Box::new(m20240101_000006_create_calendar_events_table::Migration),
             Box::new(m20240101_000007_create_user_settings_table::Migration),
+            Box::new(m20240101_000008_create_countdowns_table::Migration),
         ]
     }
 }

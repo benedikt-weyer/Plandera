@@ -9,6 +9,7 @@ import {
   ProjectDecrypted,
   CalendarDecrypted,
   CalendarEventDecrypted,
+  CountdownDecrypted,
   UserSettingsDecrypted,
   CreateCanDoItemDecryptedRequest,
   UpdateCanDoItemDecryptedRequest,
@@ -18,6 +19,8 @@ import {
   UpdateCalendarDecryptedRequest,
   CreateCalendarEventDecryptedRequest,
   UpdateCalendarEventDecryptedRequest,
+  CreateCountdownDecryptedRequest,
+  UpdateCountdownDecryptedRequest,
   RealtimeMessage,
   RealtimeSubscription,
   PaginatedResponse,
@@ -165,6 +168,38 @@ export interface DecryptedBackendInterface {
      * Subscribe to real-time changes for calendar events (decrypted)
      */
     subscribe(callback: (payload: RealtimeMessage<CalendarEventDecrypted>) => void): RealtimeSubscription;
+  };
+
+  countdowns: {
+    /**
+     * Get all countdowns for the current user (decrypted)
+     */
+    getAll(options?: QueryOptions): Promise<PaginatedResponse<CountdownDecrypted>>;
+
+    /**
+     * Get a single countdown by ID (decrypted)
+     */
+    getById(id: string): Promise<ApiResponse<CountdownDecrypted>>;
+
+    /**
+     * Create a new countdown with decrypted data
+     */
+    create(request: CreateCountdownDecryptedRequest): Promise<ApiResponse<CountdownDecrypted>>;
+
+    /**
+     * Update an existing countdown with decrypted data
+     */
+    update(request: UpdateCountdownDecryptedRequest): Promise<ApiResponse<CountdownDecrypted>>;
+
+    /**
+     * Delete a countdown
+     */
+    delete(id: string): Promise<{ error: string | null }>;
+
+    /**
+     * Subscribe to real-time changes for countdowns (decrypted)
+     */
+    subscribe(callback: (payload: RealtimeMessage<CountdownDecrypted>) => void): RealtimeSubscription;
   };
 
   // User Settings methods

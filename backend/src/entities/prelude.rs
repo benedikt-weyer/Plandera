@@ -5,4 +5,5 @@ pub use super::{
     can_do_list::Entity as CanDoList,
     calendars::Entity as Calendars,
     calendar_events::Entity as CalendarEvents,
+    countdowns::Entity as Countdowns,
 };

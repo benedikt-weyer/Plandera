@@ -12,22 +12,21 @@ import {
   SignInRequest,
   ResetPasswordRequest,
   UpdatePasswordRequest,
-  CanDoItemDecrypted,
   CanDoItemEncrypted,
   CreateCanDoItemRequest,
   UpdateCanDoItemRequest,
-  ProjectDecrypted,
   ProjectEncrypted,
   CreateProjectRequest,
   UpdateProjectRequest,
-  CalendarDecrypted,
   CalendarEncrypted,
   CreateCalendarRequest,
   UpdateCalendarRequest,
-  CalendarEventDecrypted,
   CalendarEventEncrypted,
   CreateCalendarEventRequest,
   UpdateCalendarEventRequest,
+  CountdownEncrypted,
+  CreateCountdownRequest,
+  UpdateCountdownRequest,
   UserSettingsEncrypted,
   RealtimeMessage,
   RealtimeSubscription,
@@ -804,6 +803,49 @@ class RustBackendImpl implements BackendInterface {
     subscribe: (callback: (payload: RealtimeMessage<CalendarEventEncrypted>) => void): RealtimeSubscription => {
       return this.subscribe('calendar_events', callback);
     }
+  };
+
+  countdowns = {
+    getAll: async (options?: QueryOptions): Promise<PaginatedResponse<CountdownEncrypted>> => {
+      const params = new URLSearchParams();
+      if (options?.limit) params.append('limit', options.limit.toString());
+      if (options?.offset) params.append('offset', options.offset.toString());
+
+      return this.makeRequest<PaginatedResponse<CountdownEncrypted>>(`/api/countdowns?${params}`);
+    },
+
+    getById: async (id: string): Promise<ApiResponse<CountdownEncrypted>> => {
+      return this.makeRequest<ApiResponse<CountdownEncrypted>>(`/api/countdowns/${id}`);
+    },
+
+    create: async (request: CreateCountdownRequest): Promise<ApiResponse<CountdownEncrypted>> => {
+      return this.makeRequest<ApiResponse<CountdownEncrypted>>('/api/countdowns', {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+    },
+
+    update: async (request: UpdateCountdownRequest): Promise<ApiResponse<CountdownEncrypted>> => {
+      return this.makeRequest<ApiResponse<CountdownEncrypted>>(`/api/countdowns/${request.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(request),
+      });
+    },
+
+    delete: async (id: string): Promise<{ error: string | null }> => {
+      try {
+        await this.makeRequest(`/api/countdowns/${id}`, {
+          method: 'DELETE',
+        });
+        return { error: null };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : 'Failed to delete countdown' };
+      }
+    },
+
+    subscribe: (callback: (payload: RealtimeMessage<CountdownEncrypted>) => void): RealtimeSubscription => {
+      return this.subscribe('countdowns', callback);
+    },
   };
 
   // User Settings methods

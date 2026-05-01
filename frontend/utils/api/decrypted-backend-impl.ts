@@ -15,6 +15,8 @@ import {
   CalendarEncrypted,
   CalendarEventDecrypted,
   CalendarEventEncrypted,
+  CountdownDecrypted,
+  CountdownEncrypted,
   UserSettingsDecrypted,
   CreateCanDoItemDecryptedRequest,
   UpdateCanDoItemDecryptedRequest,
@@ -24,6 +26,8 @@ import {
   UpdateCalendarDecryptedRequest,
   CreateCalendarEventDecryptedRequest,
   UpdateCalendarEventDecryptedRequest,
+  CreateCountdownDecryptedRequest,
+  UpdateCountdownDecryptedRequest,
   CreateCanDoItemRequest,
   UpdateCanDoItemRequest,
   CreateProjectRequest,
@@ -32,6 +36,8 @@ import {
   UpdateCalendarRequest,
   CreateCalendarEventRequest,
   UpdateCalendarEventRequest,
+  CreateCountdownRequest,
+  UpdateCountdownRequest,
   RealtimeMessage,
   RealtimeSubscription,
   PaginatedResponse,
@@ -165,6 +171,22 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       created_at: encrypted.created_at,
       updated_at: encrypted.updated_at,
       user_id: encrypted.user_id,
+      ...decryptedData,
+    };
+  }
+
+  private decryptCountdown(encrypted: CountdownEncrypted): CountdownDecrypted {
+    const decryptedData = this.decryptItemData<{
+      target: 'start' | 'end';
+      task_id?: string;
+    }>(encrypted);
+
+    return {
+      id: encrypted.id,
+      created_at: encrypted.created_at,
+      updated_at: encrypted.updated_at,
+      user_id: encrypted.user_id,
+      event_id: encrypted.event_id,
       ...decryptedData,
     };
   }
@@ -602,6 +624,95 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
           ...payload,
           new: payload.new ? this.decryptCalendarEvent(payload.new) : undefined,
           old: payload.old ? this.decryptCalendarEvent(payload.old) : undefined,
+        };
+        callback(decryptedPayload);
+      });
+    },
+  };
+
+  countdowns = {
+    getAll: async (options?: QueryOptions): Promise<PaginatedResponse<CountdownDecrypted>> => {
+      const response = await this.backend.countdowns.getAll(options);
+      return {
+        ...response,
+        data: response.data.map((item) => this.decryptCountdown(item)),
+      };
+    },
+
+    getById: async (id: string): Promise<ApiResponse<CountdownDecrypted>> => {
+      const response = await this.backend.countdowns.getById(id);
+      return {
+        ...response,
+        data: response.data ? this.decryptCountdown(response.data) : null,
+      };
+    },
+
+    create: async (request: CreateCountdownDecryptedRequest): Promise<ApiResponse<CountdownDecrypted>> => {
+      const { encrypted_data, iv, salt } = this.encryptItemData({
+        target: request.target,
+        task_id: request.task_id,
+      });
+
+      const encryptedRequest: CreateCountdownRequest = {
+        event_id: request.event_id,
+        encrypted_data,
+        iv,
+        salt,
+      };
+
+      const response = await this.backend.countdowns.create(encryptedRequest);
+      return {
+        ...response,
+        data: response.data ? this.decryptCountdown(response.data) : null,
+      };
+    },
+
+    update: async (request: UpdateCountdownDecryptedRequest): Promise<ApiResponse<CountdownDecrypted>> => {
+      let encryptedData: string | undefined;
+      let iv: string | undefined;
+      let salt: string | undefined;
+
+      if (request.target !== undefined || 'task_id' in request) {
+        const currentResponse = await this.backend.countdowns.getById(request.id);
+        if (!currentResponse.data) {
+          throw new Error('Countdown not found');
+        }
+
+        const currentData = this.decryptCountdown(currentResponse.data);
+        const encrypted = this.encryptItemData({
+          target: request.target ?? currentData.target,
+          task_id: 'task_id' in request ? request.task_id : currentData.task_id,
+        });
+        encryptedData = encrypted.encrypted_data;
+        iv = encrypted.iv;
+        salt = encrypted.salt;
+      }
+
+      const encryptedRequest: UpdateCountdownRequest = {
+        id: request.id,
+        ...(request.event_id !== undefined && { event_id: request.event_id }),
+        ...(encryptedData !== undefined && { encrypted_data: encryptedData }),
+        ...(iv !== undefined && { iv }),
+        ...(salt !== undefined && { salt }),
+      };
+
+      const response = await this.backend.countdowns.update(encryptedRequest);
+      return {
+        ...response,
+        data: response.data ? this.decryptCountdown(response.data) : null,
+      };
+    },
+
+    delete: async (id: string): Promise<{ error: string | null }> => {
+      return this.backend.countdowns.delete(id);
+    },
+
+    subscribe: (callback: (payload: RealtimeMessage<CountdownDecrypted>) => void): RealtimeSubscription => {
+      return this.backend.countdowns.subscribe((payload: RealtimeMessage<CountdownEncrypted>) => {
+        const decryptedPayload: RealtimeMessage<CountdownDecrypted> = {
+          ...payload,
+          new: payload.new ? this.decryptCountdown(payload.new) : undefined,
+          old: payload.old ? this.decryptCountdown(payload.old) : undefined,
         };
         callback(decryptedPayload);
       });

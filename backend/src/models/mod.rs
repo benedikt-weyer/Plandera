@@ -6,6 +6,7 @@ pub mod project;
 pub mod can_do_list;
 pub mod calendar;
 pub mod calendar_event;
+pub mod countdown;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedData {

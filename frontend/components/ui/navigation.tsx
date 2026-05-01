@@ -9,9 +9,10 @@ interface NavLinkProps {
   href: string;
   children: React.ReactNode;
   className?: string;
+  onClick?: () => void;
 }
 
-export function NavLink({ href, children, className }: NavLinkProps) {
+export function NavLink({ href, children, className, onClick }: Readonly<NavLinkProps>) {
   const pathname = usePathname();
   const isActive = pathname.startsWith(href);
 
@@ -25,7 +26,7 @@ export function NavLink({ href, children, className }: NavLinkProps) {
         className
       )}
     >
-      <Link href={href}>{children}</Link>
+      <Link href={href} onClick={onClick}>{children}</Link>
     </Button>
   );
 } 

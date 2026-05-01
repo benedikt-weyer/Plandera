@@ -2,11 +2,12 @@ use sea_orm::{entity::prelude::*, Set};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "calendar_events")]
+#[sea_orm(table_name = "countdowns")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
+    pub event_id: Uuid,
     pub encrypted_data: String,
     pub iv: String,
     pub salt: String,
@@ -24,8 +25,14 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     User,
-    #[sea_orm(has_many = "super::countdowns::Entity")]
-    Countdowns,
+    #[sea_orm(
+        belongs_to = "super::calendar_events::Entity",
+        from = "Column::EventId",
+        to = "super::calendar_events::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    Event,
 }
 
 impl Related<super::users::Entity> for Entity {
@@ -34,9 +41,9 @@ impl Related<super::users::Entity> for Entity {
     }
 }
 
-impl Related<super::countdowns::Entity> for Entity {
+impl Related<super::calendar_events::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Countdowns.def()
+        Relation::Event.def()
     }
 }
 

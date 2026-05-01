@@ -18,13 +18,13 @@ interface MobileNavbarProps {
   authComponent: React.ReactNode;
 }
 
-export function Navbar({ themeSwitcher, authComponent }: MobileNavbarProps) {
+export function Navbar({ themeSwitcher, authComponent }: Readonly<MobileNavbarProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const pathname = usePathname();
   const isSettingsPage = pathname === '/settings';
   const isSchedulerPage = pathname === '/';
-  const { schedulerNavContent } = useSchedulerNav();
+  const { schedulerNavContent, schedulerNavActions } = useSchedulerNav();
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -71,12 +71,14 @@ export function Navbar({ themeSwitcher, authComponent }: MobileNavbarProps) {
   return (
     <nav className="w-full relative">
       {/* Backdrop blur overlay - only visible on mobile when menu is open */}
-      <div 
+      <button
+        type="button"
         className={cn(
           "md:hidden fixed inset-0 top-16 bg-black/20 backdrop-blur-sm z-40 transition-opacity duration-300",
           isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={closeMenu}
+        aria-label={t('navbar.toggleMenu')}
       />
       
       {/* Desktop and Mobile Header */}
@@ -101,6 +103,8 @@ export function Navbar({ themeSwitcher, authComponent }: MobileNavbarProps) {
           "flex items-center gap-2 md:gap-4",
           !isSchedulerPage && "ml-auto"
         )}>
+          {isSchedulerPage && schedulerNavActions}
+
           {/* Settings icon - Hidden on mobile */}
           <Link href={isSettingsPage ? "/" : "/settings"} className="hidden md:flex">
             <Button 
@@ -145,8 +149,12 @@ export function Navbar({ themeSwitcher, authComponent }: MobileNavbarProps) {
             </div>
           )}
           
-          <div onClick={closeMenu}>
-            <NavLink href={isSettingsPage ? "/" : "/settings"} className="w-full justify-start">
+          <div>
+            <NavLink
+              href={isSettingsPage ? "/" : "/settings"}
+              className="w-full justify-start"
+              onClick={closeMenu}
+            >
               {isSettingsPage ? t('navbar.backToScheduler') : t('navbar.settings')}
             </NavLink>
           </div>

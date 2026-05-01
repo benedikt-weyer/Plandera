@@ -19,7 +19,7 @@ use std::env;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use std::io::{self, Write};
+use std::io::Write;
 
 use crate::{
     auth::AuthService,
@@ -106,6 +106,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                get(crate::handlers::calendar_events::get_event)
                .put(crate::handlers::calendar_events::update_event)
                .delete(crate::handlers::calendar_events::delete_event))
+         .route("/api/countdowns",
+             get(crate::handlers::countdowns::list_countdowns)
+             .post(crate::handlers::countdowns::create_countdown))
+         .route("/api/countdowns/{id}",
+             get(crate::handlers::countdowns::get_countdown)
+             .put(crate::handlers::countdowns::update_countdown)
+             .delete(crate::handlers::countdowns::delete_countdown))
         .route("/api/user-settings",
                get(crate::handlers::user_settings::get_user_settings)
                .put(crate::handlers::user_settings::update_user_settings))

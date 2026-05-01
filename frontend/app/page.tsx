@@ -7,11 +7,17 @@ import { ErrorProvider, useError } from '@/utils/context/ErrorContext';
 import { SchedulerPageService } from './scheduler-page-service';
 import { getDecryptedBackend } from '@/utils/api/decrypted-backend';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { CanDoItemDecrypted, ProjectDecrypted, RealtimeSubscription, RealtimeMessage } from '@/utils/api/types';
+import {
+  CanDoItemDecrypted,
+  CountdownDecrypted,
+  ProjectDecrypted,
+  RealtimeSubscription,
+  RealtimeMessage,
+} from '@/utils/api/types';
 import { CalendarEvent, Calendar } from '@/utils/calendar/calendar-types';
 import { CalendarMain } from '@/components/calendar/calendar-main';
 import CanDoListMain from '@/components/can-do-list/can-do-list-main';
-import { LayoutList, Calendar as CalendarIcon } from 'lucide-react';
+import { LayoutList, Calendar as CalendarIcon, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
 import { cn } from '@/lib/shadcn-utils';
@@ -26,12 +32,13 @@ import { useCalendar } from '@/stores/calendar-store';
 import { useWeekStartDay } from '@/stores/settings-store';
 import { TaskAutoplanAssignment } from '@/utils/calendar/task-reservation-utils';
 import { AppLoadingScreen } from '@/components/app-loading-screen';
+import { CountdownOverviewDialog } from '@/components/countdowns/countdown-overview-dialog';
 
 
 function SchedulerPageContent() {
   const { encryptionKey, isLoading: isLoadingKey } = useEncryptionKey();
   const { setError } = useError();
-  const { setSchedulerNavContent } = useSchedulerNav();
+  const { setSchedulerNavActions, setSchedulerNavContent } = useSchedulerNav();
   const { t } = useTranslation();
   const { setNavigateToTask } = useTaskNavigation();
   const { navigateToEvent: navigateToEventInCalendar } = useCalendar();
@@ -49,6 +56,8 @@ function SchedulerPageContent() {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [icsEvents, setIcsEvents] = useState<CalendarEvent[]>([]);
+  const [countdowns, setCountdowns] = useState<CountdownDecrypted[]>([]);
+  const [isCountdownDialogOpen, setIsCountdownDialogOpen] = useState(false);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
 
   // Can-do list state
@@ -562,11 +571,14 @@ function SchedulerPageContent() {
 
       try {
         setIsLoadingCalendar(true);
+        const backend = getDecryptedBackend();
         
         // Load all calendar and event data together
         const { calendars, events } = await schedulerPageService.loadSchedulerData();
         setCalendars(calendars);
         setCalendarEvents(events);
+        const { data: countdownData } = await backend.countdowns.getAll();
+        setCountdowns(countdownData);
         
         // Load ICS events
         const icsEventsData = await schedulerPageService.fetchAllICSEvents(calendars);
@@ -581,6 +593,45 @@ function SchedulerPageContent() {
     
     loadCalendarData();
   }, [schedulerPageService, setError]);
+
+  const handleCreateCountdown = useCallback(async (
+    input: { eventId: string; target: 'start' | 'end'; taskId?: string },
+  ): Promise<void> => {
+    try {
+      const backend = getDecryptedBackend();
+      const { data } = await backend.countdowns.create({
+        event_id: input.eventId,
+        target: input.target,
+        task_id: input.taskId,
+      });
+
+      if (!data) {
+        throw new Error('Countdown creation failed');
+      }
+
+      setCountdowns((prev) => [...prev, data]);
+      toast.success('Countdown created');
+    } catch (error) {
+      console.error('Failed to create countdown:', error);
+      toast.error('Failed to create countdown');
+    }
+  }, []);
+
+  const handleDeleteCountdown = useCallback(async (countdownId: string): Promise<void> => {
+    try {
+      const backend = getDecryptedBackend();
+      const result = await backend.countdowns.delete(countdownId);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      setCountdowns((prev) => prev.filter((countdown) => countdown.id !== countdownId));
+      toast.success('Countdown removed');
+    } catch (error) {
+      console.error('Failed to delete countdown:', error);
+      toast.error('Failed to delete countdown');
+    }
+  }, []);
 
   // Calendar handlers
   const handleCalendarToggle = useCallback(async (calendarId: string, isVisible: boolean): Promise<void> => {
@@ -1105,6 +1156,24 @@ function SchedulerPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showTaskList, showCalendar]);
 
+  useEffect(() => {
+    setSchedulerNavActions(
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Open countdowns"
+        onClick={() => setIsCountdownDialogOpen(true)}
+        className={cn(isCountdownDialogOpen && 'bg-secondary')}
+      >
+        <Timer className="h-5 w-5" />
+      </Button>,
+    );
+
+    return () => {
+      setSchedulerNavActions(null);
+    };
+  }, [isCountdownDialogOpen, setSchedulerNavActions]);
+
   // Get default calendar for creating events from tasks
   const defaultCalendar = calendars.find((cal: Calendar) => cal.is_default) || calendars[0];
 
@@ -1449,7 +1518,17 @@ function SchedulerPageContent() {
             />
           </div>
         )}
-              </div>
+      </div>
+
+      <CountdownOverviewDialog
+        open={isCountdownDialogOpen}
+        onOpenChange={setIsCountdownDialogOpen}
+        countdowns={countdowns}
+        events={calendarEvents}
+        tasks={tasks}
+        onCreateCountdown={handleCreateCountdown}
+        onDeleteCountdown={handleDeleteCountdown}
+      />
     </div>
   );
 }

@@ -333,6 +333,55 @@ export interface UpdateCalendarEventDecryptedRequest {
   task_id?: string;
 }
 
+export interface CountdownEncrypted {
+  id: string;
+  user_id: string;
+  event_id: string;
+  created_at: string;
+  updated_at: string;
+  encrypted_data: string;
+  iv: string;
+  salt: string;
+}
+
+export interface CountdownDecrypted {
+  id: string;
+  user_id: string;
+  event_id: string;
+  target: 'start' | 'end';
+  task_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCountdownRequest {
+  event_id: string;
+  encrypted_data: string;
+  iv: string;
+  salt: string;
+}
+
+export interface UpdateCountdownRequest {
+  id: string;
+  event_id?: string;
+  encrypted_data?: string;
+  iv?: string;
+  salt?: string;
+}
+
+export interface CreateCountdownDecryptedRequest {
+  event_id: string;
+  target: 'start' | 'end';
+  task_id?: string;
+}
+
+export interface UpdateCountdownDecryptedRequest {
+  id: string;
+  event_id?: string;
+  target?: 'start' | 'end';
+  task_id?: string;
+}
+
 // Real-time subscription types
 export interface RealtimeMessage<T = any> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';

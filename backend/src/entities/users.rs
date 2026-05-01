@@ -29,6 +29,8 @@ pub enum Relation {
     Calendars,
     #[sea_orm(has_many = "super::calendar_events::Entity")]
     CalendarEvents,
+    #[sea_orm(has_many = "super::countdowns::Entity")]
+    Countdowns,
 }
 
 impl Related<super::projects::Entity> for Entity {
@@ -52,6 +54,12 @@ impl Related<super::calendars::Entity> for Entity {
 impl Related<super::calendar_events::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::CalendarEvents.def()
+    }
+}
+
+impl Related<super::countdowns::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Countdowns.def()
     }
 }
 
