@@ -1525,7 +1525,6 @@ function SchedulerPageContent() {
         onOpenChange={setIsCountdownDialogOpen}
         countdowns={countdowns}
         events={calendarEvents}
-        tasks={tasks}
         onCreateCountdown={handleCreateCountdown}
         onDeleteCountdown={handleDeleteCountdown}
       />

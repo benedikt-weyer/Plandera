@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
+import Fuse from "fuse.js";
 import { CalendarEvent } from "@/utils/calendar/calendar-types";
-import { CanDoItemDecrypted, CountdownDecrypted } from "@/utils/api/types";
+import { CountdownDecrypted } from "@/utils/api/types";
 import {
   Dialog,
   DialogContent,
@@ -12,34 +13,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { cn } from "@/lib/shadcn-utils";
-import {
   CalendarClock,
-  Check,
-  ChevronsUpDown,
-  Link2,
+  Calendar as CalendarIcon,
+  Search,
   Timer,
   Trash2,
 } from "lucide-react";
@@ -49,7 +30,6 @@ interface CountdownOverviewDialogProps {
   readonly onOpenChange: (open: boolean) => void;
   readonly countdowns: CountdownDecrypted[];
   readonly events: CalendarEvent[];
-  readonly tasks: CanDoItemDecrypted[];
   readonly onCreateCountdown: (input: {
     eventId: string;
     target: "start" | "end";
@@ -104,17 +84,18 @@ export function CountdownOverviewDialog({
   onOpenChange,
   countdowns,
   events,
-  tasks,
   onCreateCountdown,
   onDeleteCountdown,
 }: CountdownOverviewDialogProps) {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedTarget, setSelectedTarget] = useState<"start" | "end">("start");
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
-  const [taskSearchOpen, setTaskSearchOpen] = useState(false);
+  const [eventSearchQuery, setEventSearchQuery] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
@@ -131,12 +112,50 @@ export function CountdownOverviewDialog({
     };
   }, [open]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const availableEvents = useMemo(() => {
     return [...events].sort(
       (left, right) =>
         new Date(left.start_time).getTime() - new Date(right.start_time).getTime(),
     );
   }, [events]);
+
+  const eventSearch = useMemo(
+    () =>
+      new Fuse(availableEvents, {
+        keys: [
+          { name: "title", weight: 2 },
+          { name: "description", weight: 1 },
+          { name: "location", weight: 1 },
+        ],
+        threshold: 0.3,
+        includeScore: true,
+        minMatchCharLength: 2,
+      }),
+    [availableEvents],
+  );
+
+  const filteredEvents = useMemo(() => {
+    const trimmedQuery = eventSearchQuery.trim();
+    if (!trimmedQuery) {
+      return availableEvents.slice(0, 12);
+    }
+
+    return eventSearch.search(trimmedQuery).slice(0, 12).map((result) => result.item);
+  }, [availableEvents, eventSearch, eventSearchQuery]);
 
   useEffect(() => {
     if (selectedEventId || availableEvents.length === 0) {
@@ -145,6 +164,21 @@ export function CountdownOverviewDialog({
 
     setSelectedEventId(availableEvents[0].id);
   }, [availableEvents, selectedEventId]);
+
+  const selectedEvent = useMemo(
+    () => availableEvents.find((event) => event.id === selectedEventId),
+    [availableEvents, selectedEventId],
+  );
+
+  const formatEventTime = (event: CalendarEvent) => {
+    if (event.all_day) {
+      return "All day";
+    }
+
+    const start = format(new Date(event.start_time), "HH:mm");
+    const end = format(new Date(event.end_time), "HH:mm");
+    return `${start} - ${end}`;
+  };
 
   const sortedCountdowns = useMemo(() => {
     return [...countdowns].sort((left, right) => {
@@ -167,10 +201,6 @@ export function CountdownOverviewDialog({
     });
   }, [countdowns, events]);
 
-  const selectedTask = selectedTaskId
-    ? tasks.find((task) => task.id === selectedTaskId)
-    : undefined;
-
   const handleCreate = async () => {
     if (!selectedEventId) {
       return;
@@ -181,9 +211,7 @@ export function CountdownOverviewDialog({
       await onCreateCountdown({
         eventId: selectedEventId,
         target: selectedTarget,
-        taskId: selectedTaskId || undefined,
       });
-      setSelectedTaskId("");
       setSelectedTarget("start");
     } finally {
       setIsCreating(false);
@@ -199,47 +227,98 @@ export function CountdownOverviewDialog({
     }
   };
 
+  const handleEventClick = (event: CalendarEvent) => {
+    setSelectedEventId(event.id);
+    setEventSearchQuery("");
+    setIsDropdownOpen(false);
+    inputRef.current?.blur();
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="h-[92vh] max-w-[96vw] sm:max-w-[94vw] lg:max-w-[92vw] overflow-hidden p-0">
+        <div className="flex h-full flex-col overflow-hidden p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Timer className="h-5 w-5" />
             Event Countdowns
           </DialogTitle>
           <DialogDescription>
-            Create countdowns for calendar events, optionally link them to tasks, and remove them when you no longer need them.
+            Create countdowns for calendar events and remove them when you no longer need them.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <section className="space-y-4 rounded-lg border bg-card p-4">
+        <div className="mt-6 grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+          <section className="space-y-4 rounded-lg border bg-card p-4 overflow-visible">
             <div className="space-y-1">
               <h3 className="font-medium">Create Countdown</h3>
               <p className="text-sm text-muted-foreground">
-                Pick an event, choose whether the countdown ends at the start or end, and optionally attach a task.
+                Pick an event, choose whether the countdown ends at the start or end, then create the countdown.
               </p>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3 min-h-0 overflow-visible">
               <Label htmlFor="countdown-event">Event</Label>
-              <Select value={selectedEventId} onValueChange={setSelectedEventId}>
-                <SelectTrigger id="countdown-event">
-                  <SelectValue placeholder="Select an event" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableEvents.map((event) => (
-                    <SelectItem key={event.id} value={event.id}>
-                      <div className="flex min-w-0 flex-col">
-                        <span className="truncate">{event.title}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(event.start_time), "MMM d, yyyy HH:mm")}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div ref={dropdownRef} className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="countdown-event"
+                  ref={inputRef}
+                  value={eventSearchQuery}
+                  onChange={(event) => {
+                    setEventSearchQuery(event.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  placeholder="Search events"
+                  className="pl-9"
+                />
+
+                {isDropdownOpen && filteredEvents.length > 0 ? (
+                  <div className="absolute z-50 mt-1 max-h-[400px] w-full overflow-y-auto rounded-md border bg-popover shadow-lg">
+                    {filteredEvents.map((event) => (
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => handleEventClick(event)}
+                        className="flex w-full items-start gap-3 border-b px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <CalendarIcon className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">{event.title}</div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">
+                            {format(new Date(event.start_time), "EEE, MMM d, yyyy")}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatEventTime(event)}
+                          </div>
+                          {event.location ? (
+                            <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                              {event.location}
+                            </div>
+                          ) : null}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {isDropdownOpen && eventSearchQuery.trim() && filteredEvents.length === 0 ? (
+                  <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-3 shadow-lg">
+                    <p className="text-center text-sm text-muted-foreground">No matching events.</p>
+                  </div>
+                ) : null}
+              </div>
+
+              {selectedEvent ? (
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  <div className="truncate font-medium">{selectedEvent.title}</div>
+                  <div className="text-muted-foreground">
+                    {format(new Date(selectedEvent.start_time), "MMM d, yyyy HH:mm")}
+                  </div>
+                </div>
+              ) : null}
+
             </div>
 
             <div className="space-y-2">
@@ -258,75 +337,12 @@ export function CountdownOverviewDialog({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Linked Task</Label>
-              <Popover open={taskSearchOpen} onOpenChange={setTaskSearchOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className="w-full justify-between"
-                  >
-                    <span className="truncate">
-                      {selectedTask ? selectedTask.content : "Attach a task (optional)"}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search tasks..." className="h-9" />
-                    <CommandList>
-                      <CommandEmpty>No matching task.</CommandEmpty>
-                      <CommandGroup>
-                        {tasks.map((task) => (
-                          <CommandItem
-                            key={task.id}
-                            value={`${task.content} ${task.project_id ?? ""}`}
-                            onSelect={() => {
-                              setSelectedTaskId(task.id);
-                              setTaskSearchOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedTaskId === task.id ? "opacity-100" : "opacity-0",
-                              )}
-                            />
-                            <span className="truncate">{task.content}</span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-
-              {selectedTask ? (
-                <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{selectedTask.content}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedTaskId("")}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-
             <Button onClick={handleCreate} disabled={!selectedEventId || isCreating} className="w-full">
               {isCreating ? "Creating..." : "Create countdown"}
             </Button>
           </section>
 
-          <section className="space-y-4 rounded-lg border bg-card p-4">
+          <section className="space-y-4 rounded-lg border bg-card p-4 min-h-0 overflow-hidden">
             <div className="space-y-1">
               <h3 className="font-medium">Current Countdowns</h3>
               <p className="text-sm text-muted-foreground">
@@ -334,7 +350,7 @@ export function CountdownOverviewDialog({
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 overflow-y-auto pr-1">
               {sortedCountdowns.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                   No countdowns yet.
@@ -342,9 +358,6 @@ export function CountdownOverviewDialog({
               ) : (
                 sortedCountdowns.map((countdown) => {
                   const event = events.find((entry) => entry.id === countdown.event_id);
-                  const task = countdown.task_id
-                    ? tasks.find((entry) => entry.id === countdown.task_id)
-                    : undefined;
                   const targetTimestamp = getCountdownTimestamp(event, countdown.target);
 
                   return (
@@ -380,13 +393,6 @@ export function CountdownOverviewDialog({
                               )}
                             </p>
                           ) : null}
-
-                          {task ? (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Link2 className="h-4 w-4" />
-                              <span className="truncate">{task.content}</span>
-                            </div>
-                          ) : null}
                         </div>
 
                         <Button
@@ -406,6 +412,7 @@ export function CountdownOverviewDialog({
               )}
             </div>
           </section>
+        </div>
         </div>
       </DialogContent>
     </Dialog>
