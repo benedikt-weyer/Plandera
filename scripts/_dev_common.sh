@@ -10,6 +10,62 @@ FRONTEND_PID_FILE="$STATE_DIR/frontend.pid"
 BACKEND_LOG_FILE="/tmp/backend.log"
 FRONTEND_LOG_FILE="/tmp/frontend.log"
 
+is_port_in_use() {
+  local port="$1"
+  ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)$port$"
+}
+
+find_available_port() {
+  local start_port="$1"
+  local port="$start_port"
+
+  while is_port_in_use "$port"; do
+    port=$((port + 1))
+  done
+
+  printf '%s\n' "$port"
+}
+
+get_streamline_db_published_port() {
+  docker port streamline-db 5432/tcp 2>/dev/null | awk -F: 'NR==1 {print $NF}' || true
+}
+
+sql_escape_literal() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+sync_database_credentials() {
+  local postgres_user="${POSTGRES_USER:-postgres}"
+  local escaped_password
+  escaped_password=$(sql_escape_literal "${POSTGRES_PASSWORD:-}")
+
+  if docker exec streamline-db psql -U "$postgres_user" -d postgres -c "ALTER USER \"$postgres_user\" WITH PASSWORD '$escaped_password';" >/dev/null 2>&1; then
+    echo "Synchronized PostgreSQL credentials from root .env"
+  else
+    echo "Warning: Failed to synchronize PostgreSQL credentials with the running database" >&2
+  fi
+}
+
+wait_for_backend() {
+  local health_url="http://localhost:${BACKEND_PORT:-3001}/health"
+  local attempts=30
+  local attempt=1
+
+  while [ "$attempt" -le "$attempts" ]; do
+    if curl -fsS "$health_url" >/dev/null 2>&1; then
+      echo "Backend is ready at $health_url"
+      return 0
+    fi
+
+    sleep 1
+    attempt=$((attempt + 1))
+  done
+
+  echo "Backend failed to become ready at $health_url" >&2
+  tail -n 40 "$BACKEND_LOG_FILE" >&2 || true
+  return 1
+}
+
 ensure_state_dir() {
   mkdir -p "$STATE_DIR"
 }
@@ -113,8 +169,27 @@ start_database() {
   ensure_root_env
   load_root_env
 
+  local configured_port="${POSTGRES_PORT:-5432}"
+  local published_port
+  local compose_recreate_flag="--no-recreate"
+
+  published_port=$(get_streamline_db_published_port)
+
+  if [ -z "$published_port" ] || [ "$published_port" != "$configured_port" ]; then
+    if is_port_in_use "$configured_port" && [ "$published_port" != "$configured_port" ]; then
+      local available_port
+      available_port=$(find_available_port $((configured_port + 1)))
+      sed_inplace "s/POSTGRES_PORT=.*/POSTGRES_PORT=$available_port/" "$PROJECT_DIR/.env"
+      load_root_env
+      configured_port="$available_port"
+      echo "Updated POSTGRES_PORT in .env to $configured_port because port $POSTGRES_PORT was already in use"
+    fi
+
+    compose_recreate_flag="--force-recreate"
+  fi
+
   cd "$PROJECT_DIR"
-  docker-compose up -d db pgadmin
+  docker-compose up -d "$compose_recreate_flag" db pgadmin
 
   echo "Database started on localhost:${POSTGRES_PORT:-5432}"
   echo "pgAdmin started on localhost:${PGADMIN_PORT:-5050}"
@@ -125,6 +200,7 @@ start_database() {
   done
 
   echo "Database is ready"
+  sync_database_credentials
 }
 
 start_backend() {
@@ -135,8 +211,10 @@ start_backend() {
 
   echo "Starting Rust backend server..."
   cd "$PROJECT_DIR/backend"
+  : >"$BACKEND_LOG_FILE"
   nohup cargo watch -x run >"$BACKEND_LOG_FILE" 2>&1 &
   echo $! >"$BACKEND_PID_FILE"
+  wait_for_backend
   echo "Backend server started with hot reload"
   echo "API available at http://localhost:${BACKEND_PORT:-3001}"
 }

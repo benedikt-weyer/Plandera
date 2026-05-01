@@ -60,9 +60,6 @@
               ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
 
             RUST_LOG = "debug";
-            DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/postgres";
-            JWT_SECRET = "dev-jwt-secret-key-for-local-development-only";
-            VITE_BACKEND_URL = "http://localhost:3001";
             PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig:${pkgs.postgresql_15}/lib/pkgconfig";
             OPENSSL_DIR = "${pkgs.openssl.dev}";
             OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
@@ -70,6 +67,16 @@
 
             shellHook = ''
               unset NODE_ENV
+
+              if [ -f .env ]; then
+                set -a
+                . ./.env
+                set +a
+              fi
+
+              export DATABASE_URL="postgres://''${POSTGRES_USER:-postgres}:''${POSTGRES_PASSWORD:-postgres}@localhost:''${POSTGRES_PORT:-5432}/''${POSTGRES_DB:-postgres}"
+              export JWT_SECRET="''${JWT_SECRET:-dev-jwt-secret-key-for-local-development-only}"
+              export VITE_BACKEND_URL="http://localhost:''${BACKEND_PORT:-3001}"
             '';
           };
         });
