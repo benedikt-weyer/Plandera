@@ -1,5 +1,8 @@
 .local/
-.env*
+.env
+.env.*
+
+flake-profile*
 
 certs/
 

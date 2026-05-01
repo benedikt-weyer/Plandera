@@ -22,13 +22,13 @@ Streamline Scheduler is an open source self-hostable calendar-todolist combo wit
 - **Real-time**: WebSocket implementation for instant synchronization
 - **Security**: Client-side encryption with crypto-js and PBKDF2 key derivation
 - **Package Manager**: pnpm
-- **Development**: Nix shell environment, Docker Compose for local development
+- **Development**: Nix flake dev shell, Docker Compose for local development
 
 ## Tech Stack
 
 - **Frontend**: Next.js 14+, React 19, TypeScript, Tailwind CSS, shadcn/ui, crypto-js, @dnd-kit
 - **Backend**: Rust, Axum, SeaORM, PostgreSQL, JWT authentication, WebSocket support
-- **Development**: Nix shell environment, Docker, pnpm
+- **Development**: Nix flake dev shell, Docker, pnpm
 - **Security**: End-to-end encryption, client-side key derivation
 
 ## Self-Hosting
