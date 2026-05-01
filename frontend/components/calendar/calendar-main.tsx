@@ -28,7 +28,7 @@ import {
 } from "@/utils/calendar/calendarHelpers";
 import { getRecurrencePattern } from "@/utils/calendar/eventDataProcessing";
 import { startOfDay, startOfWeek } from "date-fns";
-import { ProjectDecrypted } from "@/utils/api/types";
+import { CountdownDecrypted, ProjectDecrypted } from "@/utils/api/types";
 
 export interface CalendarMainProps {
   // Data
@@ -39,12 +39,17 @@ export interface CalendarMainProps {
   error?: string | null;
   tasks?: any[]; // Can-do list tasks for event-task linking
   projects?: ProjectDecrypted[];
+  countdowns?: CountdownDecrypted[];
   onNavigateToTask?: (taskId: string) => void;
   onCreateTaskFromEvent?: (
     eventId: string,
     title: string,
     projectId: string | null,
   ) => Promise<void>;
+  onCreateCountdown?: (
+    eventId: string,
+    target: "start" | "end",
+  ) => Promise<boolean>;
 
   // State props (optional - component can manage its own state if not provided)
   currentWeek?: Date;
@@ -123,8 +128,10 @@ export function CalendarMain({
   error,
   tasks,
   projects,
+  countdowns,
   onNavigateToTask,
   onCreateTaskFromEvent,
+  onCreateCountdown,
 
   // State props (with defaults for internal state management)
   currentWeek: propCurrentWeek,
@@ -1075,12 +1082,14 @@ export function CalendarMain({
             : undefined
         }
         projects={projects}
+        countdowns={countdowns}
         onCreateTaskFromEvent={
           onCreateTaskFromEvent && selectedEvent
             ? (title, projectId) =>
                 onCreateTaskFromEvent(selectedEvent.id, title, projectId)
             : undefined
         }
+        onCreateCountdown={onCreateCountdown}
       />
 
       {/* Drag/Resize Modification Dialog */}

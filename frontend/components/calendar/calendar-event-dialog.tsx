@@ -16,8 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Calendar, CalendarEvent, RecurrenceFrequency } from '@/utils/calendar/calendar-types';
 import { getRecurrencePattern } from '@/utils/calendar/eventDataProcessing';
 import { format, parse, isValid, addMinutes } from 'date-fns';
-import { Link2, ListTodo, Trash2 } from 'lucide-react';
-import { ProjectDecrypted } from '@/utils/api/types';
+import { Link2, ListTodo, Timer, Trash2 } from 'lucide-react';
+import { CountdownDecrypted, ProjectDecrypted } from '@/utils/api/types';
 import { EventTaskProjectPicker } from './event-task-project-picker';
 
 import { z } from 'zod';
@@ -149,6 +149,8 @@ interface CalendarEventDialogProps {
   readonly onNavigateToTask?: () => void;
   readonly projects?: ProjectDecrypted[];
   readonly onCreateTaskFromEvent?: (title: string, projectId: string | null) => Promise<void>;
+  readonly countdowns?: CountdownDecrypted[];
+  readonly onCreateCountdown?: (eventId: string, target: 'start' | 'end') => Promise<boolean>;
 }
 
 // Helper function to combine date and time into a single Date object
@@ -185,6 +187,8 @@ export function CalendarEventDialog({
   onNavigateToTask,
   projects,
   onCreateTaskFromEvent,
+  countdowns,
+  onCreateCountdown,
 }: CalendarEventDialogProps) {
   const { t } = useTranslation();
   
@@ -197,6 +201,8 @@ export function CalendarEventDialog({
   const [pendingModificationData, setPendingModificationData] = useState<EventFormValues | null>(null);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [countdownTarget, setCountdownTarget] = useState<'start' | 'end'>('start');
+  const [isCreatingCountdown, setIsCreatingCountdown] = useState(false);
   
   // Check if this is an ICS event (read-only)
   const isICSEvent = selectedEvent?.id?.startsWith('ics-') ?? false;
@@ -233,6 +239,8 @@ export function CalendarEventDialog({
   useEffect(() => {
     setShowProjectPicker(false);
     setIsCreatingTask(false);
+    setCountdownTarget('start');
+    setIsCreatingCountdown(false);
 
     const calendarId = selectedEvent?.calendar_id ?? defaultCalendarId ?? 
       (calendars.length > 0 ? calendars.find(cal => cal.is_default)?.id ?? calendars[0].id : '');
@@ -472,6 +480,40 @@ export function CalendarEventDialog({
     } finally {
       setIsCreatingTask(false);
       setShowProjectPicker(false);
+    }
+  };
+
+  const canCreateCountdown = Boolean(
+    selectedEvent &&
+    !isReadOnly &&
+    selectedEvent.id !== 'new' &&
+    !selectedEvent.id.includes('-recurrence-') &&
+    onCreateCountdown,
+  );
+
+  const existingCountdownTargets = new Set(
+    selectedEvent
+      ? (countdowns ?? [])
+          .filter((countdown) => countdown.event_id === selectedEvent.id)
+          .map((countdown) => countdown.target)
+      : [],
+  );
+
+  const selectedCountdownExists = existingCountdownTargets.has(countdownTarget);
+
+  const handleCreateCountdownClick = async () => {
+    if (!selectedEvent || !onCreateCountdown || selectedCountdownExists) {
+      return;
+    }
+
+    try {
+      setIsCreatingCountdown(true);
+      const success = await onCreateCountdown(selectedEvent.id, countdownTarget);
+      if (success) {
+        setCountdownTarget(existingCountdownTargets.has('start') ? 'end' : 'start');
+      }
+    } finally {
+      setIsCreatingCountdown(false);
     }
   };
 
@@ -892,9 +934,38 @@ export function CalendarEventDialog({
               </div>
             )}
             
-            <DialogFooter className="flex-row items-center justify-between sm:justify-between">
+            <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               {/* Left: secondary actions */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {canCreateCountdown && (
+                  <>
+                    <Select
+                      value={countdownTarget}
+                      onValueChange={(value: 'start' | 'end') => setCountdownTarget(value)}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="start">Start</SelectItem>
+                        <SelectItem value="end">End</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleCreateCountdownClick}
+                      disabled={isCreatingCountdown || selectedCountdownExists}
+                    >
+                      <Timer className="mr-2 h-4 w-4" />
+                      {selectedCountdownExists
+                        ? 'Countdown exists'
+                        : isCreatingCountdown
+                          ? 'Creating...'
+                          : 'Create Countdown'}
+                    </Button>
+                  </>
+                )}
                 {!isReadOnly && selectedEvent && onCreateTaskFromEvent && projects && !linkedTaskTitle && (
                   <Button
                     type="button"

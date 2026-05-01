@@ -596,7 +596,12 @@ function SchedulerPageContent() {
 
   const handleCreateCountdown = useCallback(async (
     input: { eventId: string; target: 'start' | 'end'; taskId?: string },
-  ): Promise<void> => {
+  ): Promise<boolean> => {
+    if (countdowns.some((countdown) => countdown.event_id === input.eventId && countdown.target === input.target)) {
+      toast.error('Countdown already exists');
+      return false;
+    }
+
     try {
       const backend = getDecryptedBackend();
       const { data } = await backend.countdowns.create({
@@ -611,11 +616,26 @@ function SchedulerPageContent() {
 
       setCountdowns((prev) => [...prev, data]);
       toast.success('Countdown created');
+      return true;
     } catch (error) {
       console.error('Failed to create countdown:', error);
       toast.error('Failed to create countdown');
+      return false;
     }
-  }, []);
+  }, [countdowns]);
+
+  const handleCreateCountdownFromEventDialog = useCallback(async (
+    eventId: string,
+    target: 'start' | 'end',
+  ): Promise<boolean> => {
+    return handleCreateCountdown({ eventId, target });
+  }, [handleCreateCountdown]);
+
+  const handleCreateCountdownFromOverview = useCallback(async (
+    input: { eventId: string; target: 'start' | 'end'; taskId?: string },
+  ): Promise<void> => {
+    await handleCreateCountdown(input);
+  }, [handleCreateCountdown]);
 
   const handleDeleteCountdown = useCallback(async (countdownId: string): Promise<void> => {
     try {
@@ -1485,6 +1505,7 @@ function SchedulerPageContent() {
               isLoading={isLoadingCalendar}
               tasks={tasks}
               projects={projects}
+              countdowns={countdowns}
               onNavigateToTask={(taskId) => {
                 // Open the task list if closed
                 if (!showTaskList) {
@@ -1515,6 +1536,7 @@ function SchedulerPageContent() {
               isICSEvent={(event: CalendarEvent) => schedulerPageService?.isICSEvent(event, calendars) || false}
               isReadOnlyCalendar={(calendarId: string) => schedulerPageService?.isReadOnlyCalendar(calendarId, calendars) || false}
               onCreateTaskFromEvent={handleCreateTaskFromEvent}
+              onCreateCountdown={handleCreateCountdownFromEventDialog}
             />
           </div>
         )}
@@ -1525,7 +1547,7 @@ function SchedulerPageContent() {
         onOpenChange={setIsCountdownDialogOpen}
         countdowns={countdowns}
         events={calendarEvents}
-        onCreateCountdown={handleCreateCountdown}
+        onCreateCountdown={handleCreateCountdownFromOverview}
         onDeleteCountdown={handleDeleteCountdown}
       />
     </div>
