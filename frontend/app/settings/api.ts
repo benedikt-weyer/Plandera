@@ -268,6 +268,11 @@ export async function importDecryptedUserData(data: DecryptedExportData, encrypt
         all_day: event.isAllDay,
         calendar_id: event.calendarId,
         recurrence_rule,
+        recurrence_exception: event.recurrence_exception,
+        is_group_event: event.is_group_event,
+        is_task_reservation_space: event.is_task_reservation_space,
+        parent_group_event_id: event.parent_group_event_id,
+        task_id: event.task_id,
       }, encryptionKey);
     });
 

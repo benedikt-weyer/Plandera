@@ -161,6 +161,10 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
               recurrencePattern: recurrencePattern,
               recurrence_exception: decryptedData.recurrence_exception,
               calendarId: decryptedData.calendar_id,
+              is_group_event: decryptedData.is_group_event,
+              is_task_reservation_space: decryptedData.is_task_reservation_space,
+              parent_group_event_id: decryptedData.parent_group_event_id,
+              task_id: decryptedData.task_id,
               createdAt: event.created_at,
               updatedAt: event.updated_at,
               user_id: event.user_id
