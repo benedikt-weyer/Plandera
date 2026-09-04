@@ -32,7 +32,7 @@ export interface DecryptedTask extends Omit<CanDoItemDecrypted, 'created_at' | '
   impact?: number;
   urgency?: number;
   dueDate?: string;
-  blockedBy?: string[];
+  blockedBy?: string;
   projectId?: string;
   displayOrder: number;
   createdAt: string;
@@ -197,24 +197,93 @@ export async function clearAllUserData(): Promise<void> {
   }
 }
 
-// Import decrypted user data (delegate to backend)
+// Re-encrypt a plaintext record for storage, mirroring DecryptedBackendImpl.encryptItemData
+function encryptItem(plaintext: Record<string, any>, encryptionKey: string): { encrypted_data: string; iv: string; salt: string } {
+  const salt = generateSalt();
+  const iv = generateIV();
+  const derivedKey = deriveKeyFromPassword(encryptionKey, salt);
+  const encrypted_data = encryptData(plaintext, derivedKey, iv);
+  return { encrypted_data, iv, salt };
+}
+
+// Import decrypted user data: re-encrypt every record's plaintext fields, then delegate to main import
 export async function importDecryptedUserData(data: DecryptedExportData, encryptionKey: string): Promise<void> {
   try {
-    const backend = getDecryptedBackend();
-    
-    // Convert DecryptedExportData to ExportedData format and delegate to main import
+    const can_do_list = data.data.tasks.map(task => ({
+      ...encryptItem({
+        content: task.content,
+        completed: task.completed,
+        due_date: task.dueDate,
+        impact: task.impact,
+        urgency: task.urgency,
+        tags: task.tags,
+        duration_minutes: task.estimatedDuration,
+        blocked_by: task.blockedBy,
+        my_day: task.my_day,
+        parent_task_id: task.parent_task_id,
+      }, encryptionKey),
+      project_id: task.projectId,
+      display_order: task.displayOrder,
+    }));
+
+    const projects = data.data.projects.map(project => ({
+      ...encryptItem({
+        name: project.name,
+        description: project.description,
+        color: project.color,
+      }, encryptionKey),
+      parent_id: project.parentId,
+      display_order: project.order,
+      is_collapsed: project.isCollapsed,
+    }));
+
+    const calendars = data.data.calendars.map(calendar => ({
+      ...encryptItem({
+        name: calendar.name,
+        color: calendar.color,
+        is_visible: calendar.isVisible,
+        type: calendar.type,
+        ics_url: calendar.icsUrl,
+        last_sync: calendar.lastSync,
+      }, encryptionKey),
+      is_default: calendar.isDefault,
+    }));
+
+    const calendar_events = data.data.calendarEvents.map(event => {
+      const recurrence_rule = event.recurrencePattern
+        ? JSON.stringify({
+            frequency: event.recurrencePattern.frequency,
+            interval: event.recurrencePattern.interval,
+            end_date: event.recurrencePattern.endDate,
+            days_of_week: event.recurrencePattern.daysOfWeek,
+          })
+        : (event as any).recurrence_rule;
+
+      return encryptItem({
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        start_time: event.startTime,
+        end_time: event.endTime,
+        all_day: event.isAllDay,
+        calendar_id: event.calendarId,
+        recurrence_rule,
+      }, encryptionKey);
+    });
+
+    // Convert to ExportedData format and delegate to main import
     const exportData: ExportedData = {
       version: data.version,
       timestamp: data.timestamp,
       userId: data.userId,
       data: {
-        can_do_list: data.data.tasks as any, // Type conversion handled by backend
-        projects: data.data.projects as any,
-        calendars: data.data.calendars as any,
-        calendar_events: data.data.calendarEvents as any,
+        can_do_list: can_do_list as any,
+        projects: projects as any,
+        calendars: calendars as any,
+        calendar_events: calendar_events as any,
       }
     };
-    
+
     return importUserData(exportData);
   } catch (error) {
     console.error('Failed to import decrypted user data:', error);
