@@ -1,6 +1,7 @@
 'use client';
 
 import { getBackend } from '@/utils/api/backend-interface';
+import { clearDecryptedBackend } from '@/utils/api/decrypted-backend';
 import {
   decryptJsonWithWrappedDek,
   encryptJsonForRecipients,
@@ -8,6 +9,18 @@ import {
   rewrapDekForRecipient,
 } from '@/utils/cryptography/encryption';
 import type { ApiUser, WrappedDekPayload } from '@/utils/api/types';
+
+/**
+ * Picks up a just-created/deleted api user in this tab immediately: the
+ * decrypted-backend singleton snapshots the recipients map (who to wrap
+ * new/edited records for) once at construction, and the stored session's
+ * `linkedPrincipals` is what that snapshot is built from.
+ */
+async function syncLinkedPrincipalsAfterChange(): Promise<void> {
+  const backend = getBackend();
+  await backend.auth.refreshLinkedPrincipals?.();
+  clearDecryptedBackend();
+}
 
 export interface ApiUserWithLabel extends ApiUser {
   label: string;
@@ -94,6 +107,8 @@ export async function createApiUser(label: string): Promise<{ apiUser: ApiUser; 
     throw new Error(response.error ?? 'Failed to create api user');
   }
 
+  await syncLinkedPrincipalsAfterChange();
+
   return { apiUser: response.data, tokenHex };
 }
 
@@ -106,6 +121,8 @@ export async function deleteApiUser(id: string): Promise<void> {
   if (error) {
     throw new Error(error);
   }
+
+  await syncLinkedPrincipalsAfterChange();
 }
 
 /**

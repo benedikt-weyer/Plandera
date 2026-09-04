@@ -28,6 +28,7 @@ import {
   CreateCountdownRequest,
   UpdateCountdownRequest,
   UserSettingsEncrypted,
+  UpdateUserSettingsRequest,
   RealtimeMessage,
   RealtimeSubscription,
   ApiResponse,
@@ -81,6 +82,13 @@ export interface BackendInterface {
     onAuthStateChange(callback: (event: string, session: AuthSession | null) => void): {
       data: { subscription: { unsubscribe: () => void } }
     };
+
+    /**
+     * Re-fetches this account's linked principals and updates the stored
+     * session in place. Optional since it's specific to the DEK/KEK auth
+     * model, not every possible backend.
+     */
+    refreshLinkedPrincipals?(): Promise<import('./types').LinkedPrincipal[]>;
   };
 
   // Can-do list methods
@@ -266,7 +274,7 @@ export interface BackendInterface {
     /**
      * Update user settings with encrypted data
      */
-    update(request: UserSettingsEncrypted): Promise<ApiResponse<UserSettingsEncrypted>>;
+    update(request: UpdateUserSettingsRequest): Promise<ApiResponse<UserSettingsEncrypted>>;
   };
 
   // Scoped-access secondary login principals ("API users")

@@ -13,6 +13,8 @@ import {
   getStoredCryptKey,
   storeCryptKey,
   clearStoredCryptKey,
+  rewrapDekForRecipient,
+  type CryptKey,
 } from '../cryptography/encryption';
 import {
   AuthUser,
@@ -43,6 +45,7 @@ import {
   CreateCountdownRequest,
   UpdateCountdownRequest,
   UserSettingsEncrypted,
+  UpdateUserSettingsRequest,
   RealtimeMessage,
   RealtimeSubscription,
   ApiResponse,
@@ -220,9 +223,12 @@ class RustBackendImpl implements BackendInterface {
     }
   }
 
+  private refreshPromise: Promise<boolean> | null = null;
+
   private async makeRequest<T>(
-    endpoint: string, 
-    options: RequestInit = {}
+    endpoint: string,
+    options: RequestInit = {},
+    isRetry = false
   ): Promise<T> {
     await this.ensureRuntimeConfigReady();
 
@@ -246,12 +252,63 @@ class RustBackendImpl implements BackendInterface {
       headers,
     });
 
+    // The 15-minute access token expired mid-session — use the refresh
+    // token to get a new one and retry, exactly once, before giving up.
+    if (
+      response.status === 401 &&
+      !isRetry &&
+      this.refreshToken &&
+      endpoint !== '/api/auth/refresh'
+    ) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) {
+        return this.makeRequest<T>(endpoint, options, true);
+      }
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
     return response.json();
+  }
+
+  /** Coalesces concurrent 401s into a single refresh call. */
+  private async refreshAccessToken(): Promise<boolean> {
+    if (!this.refreshToken) {
+      return false;
+    }
+
+    if (!this.refreshPromise) {
+      this.refreshPromise = (async () => {
+        try {
+          const response = await fetch(`${this.baseUrl}/api/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: this.refreshToken }),
+          });
+
+          if (!response.ok) {
+            this.clearAuthToken();
+            this.authStateCallbacks.forEach((callback) => callback('SIGNED_OUT', null));
+            return false;
+          }
+
+          const body: { data: AuthSessionApiShape } = await response.json();
+          const session = this.buildSession(body.data);
+          this.storeAuthToken(session.access_token, session.refresh_token);
+          this.storeSession(session);
+          return true;
+        } catch {
+          return false;
+        } finally {
+          this.refreshPromise = null;
+        }
+      })();
+    }
+
+    return this.refreshPromise;
   }
 
   private async initWebSocket(): Promise<void> {
@@ -466,7 +523,7 @@ class RustBackendImpl implements BackendInterface {
           }),
         });
 
-        const session = this.buildSession(response.data, credentials.cryptKey);
+        const session = this.buildSession(response.data);
         this.storeAuthToken(session.access_token, session.refresh_token);
         storeCryptKey(credentials.cryptKey);
         this.storeSession(session);
@@ -498,7 +555,7 @@ class RustBackendImpl implements BackendInterface {
           }),
         });
 
-        const session = this.buildSession(response.data, credentials.cryptKey);
+        const session = this.buildSession(response.data);
         this.storeAuthToken(session.access_token, session.refresh_token);
         storeCryptKey(credentials.cryptKey);
         this.storeSession(session);
@@ -540,22 +597,19 @@ class RustBackendImpl implements BackendInterface {
         if (!session) {
           return { error: 'Not signed in' };
         }
-        const cryptKey = getStoredCryptKey();
-        if (!cryptKey) {
+        // The account's auth_salt is fixed at registration and never
+        // rotates — always re-derive against the salt the server has on
+        // file, never a freshly generated one.
+        const oldCryptKey = getStoredCryptKey();
+        if (!oldCryptKey) {
           return { error: 'Missing local encryption key' };
         }
+        const saltResponse = await this.makeRequest<{ data: { saltHex: string } }>('/api/auth/salt', {
+          method: 'POST',
+          body: JSON.stringify({ email: session.user.email }),
+        });
 
-        const saltHex = session.kekMetadatas.length > 0 ? undefined : await createPasswordSalt();
-        const saltResponse = saltHex
-          ? { saltHex }
-          : (
-              await this.makeRequest<{ data: { saltHex: string } }>('/api/auth/salt', {
-                method: 'POST',
-                body: JSON.stringify({ email: session.user.email }),
-              })
-            ).data;
-
-        const newCredentials = await deriveCredentials(session.user.email, request.password, saltResponse.saltHex);
+        const newCredentials = await deriveCredentials(session.user.email, request.password, saltResponse.data.saltHex);
         const newKekKeyPair = await deriveKekKeyPair(newCredentials.cryptKey);
 
         const response = await this.makeRequest<{ data: AuthSessionApiShape }>('/api/auth/rotate-password', {
@@ -566,7 +620,13 @@ class RustBackendImpl implements BackendInterface {
           }),
         });
 
-        const newSession = this.buildSession(response.data, newCredentials.cryptKey);
+        // The KEK keypair is derived deterministically from the crypt key,
+        // so every record still wrapped for the *old* KEK becomes
+        // unreadable the moment the old crypt key is gone — migrate them
+        // to the new KEK first, while we still have the old key in hand.
+        await this.migrateOwnedDeksToKek(oldCryptKey, session.currentPrincipal.id, newKekKeyPair.kekPublicKey);
+
+        const newSession = this.buildSession(response.data);
         this.storeAuthToken(newSession.access_token, newSession.refresh_token);
         storeCryptKey(newCredentials.cryptKey);
         this.storeSession(newSession);
@@ -595,10 +655,75 @@ class RustBackendImpl implements BackendInterface {
           }
         }
       };
-    }
+    },
+
+    /**
+     * Re-fetches this account's linked principals (owner + every api user)
+     * and updates the stored session in place — needed after creating or
+     * deleting an api user, so this tab's `recipients` map (who new/edited
+     * records get wrapped for) picks up the change without a full re-login.
+     */
+    refreshLinkedPrincipals: async (): Promise<LinkedPrincipal[]> => {
+      const response = await this.makeRequest<{ data: LinkedPrincipal[] }>('/api/auth/linked-principals');
+      const session = this.readStoredSession();
+      if (session) {
+        this.storeSession({ ...session, linkedPrincipals: response.data });
+      }
+      return response.data;
+    },
   };
 
-  private buildSession(data: AuthSessionApiShape, cryptKey: Uint8Array): AuthSession {
+  /**
+   * Rewraps every resource this account currently owns from `oldCryptKey`'s
+   * KEK to `newKekPublicKey`, sending each as a wraps-only update (no
+   * ciphertext fields) so it merges rather than disturbing any other
+   * principal's (e.g. an api user's) existing wrap of the same resource.
+   * The DEK itself and the payload ciphertext are untouched — only who can
+   * unwrap the DEK changes.
+   */
+  private async migrateOwnedDeksToKek(oldCryptKey: CryptKey, ownerId: string, newKekPublicKey: string): Promise<void> {
+    const [canDoItems, projects, calendars, calendarEvents, countdowns, userSettings] = await Promise.all([
+      this.canDoList.getAll(),
+      this.projects.getAll({ all: true }),
+      this.calendars.getAll(),
+      this.calendarEvents.getAll(),
+      this.countdowns.getAll(),
+      this.userSettings.get(),
+    ]);
+
+    const rewrapAndUpdate = async (
+      record: { id: string; wrapped_dek?: WrappedDekPayload; algorithm: string; ciphertext_hex: string; nonce_hex: string; version: number },
+      update: (wrappedDek: WrappedDekPayload) => Promise<unknown>,
+    ) => {
+      if (!record.wrapped_dek || record.wrapped_dek.user_id !== ownerId) return;
+      const newWrap = await rewrapDekForRecipient(record, record.wrapped_dek, oldCryptKey, ownerId, newKekPublicKey);
+      await update(newWrap);
+    };
+
+    await Promise.all([
+      ...canDoItems.data.map((item) => rewrapAndUpdate(item, (w) => this.canDoList.update({ id: item.id, wrapped_deks: [w] }))),
+      ...projects.data.map((item) => rewrapAndUpdate(item, (w) => this.projects.update({ id: item.id, wrapped_deks: [w] }))),
+      ...calendars.data.map((item) => rewrapAndUpdate(item, (w) => this.calendars.update({ id: item.id, wrapped_deks: [w] }))),
+      ...calendarEvents.data.map((item) => rewrapAndUpdate(item, (w) => this.calendarEvents.update({ id: item.id, wrapped_deks: [w] }))),
+      ...countdowns.data.map((item) => rewrapAndUpdate(item, (w) => this.countdowns.update({ id: item.id, wrapped_deks: [w] }))),
+    ]);
+
+    // The singleton user-settings row requires the full payload on every
+    // update (no partial-field support), so resend its unchanged
+    // ciphertext alongside the new wrap.
+    if (userSettings.data?.wrapped_dek && userSettings.data.wrapped_dek.user_id === ownerId) {
+      const newWrap = await rewrapDekForRecipient(userSettings.data, userSettings.data.wrapped_dek, oldCryptKey, ownerId, newKekPublicKey);
+      await this.userSettings.update({
+        algorithm: userSettings.data.algorithm,
+        ciphertext_hex: userSettings.data.ciphertext_hex,
+        nonce_hex: userSettings.data.nonce_hex,
+        version: userSettings.data.version,
+        wrapped_deks: [newWrap],
+      });
+    }
+  }
+
+  private buildSession(data: AuthSessionApiShape): AuthSession {
     return {
       user: { id: data.userId, email: data.email, created_at: new Date().toISOString() },
       access_token: data.token,
@@ -913,7 +1038,7 @@ class RustBackendImpl implements BackendInterface {
       return this.makeRequest<ApiResponse<UserSettingsEncrypted>>('/api/user-settings');
     },
 
-    update: async (request: UserSettingsEncrypted): Promise<ApiResponse<UserSettingsEncrypted>> => {
+    update: async (request: UpdateUserSettingsRequest): Promise<ApiResponse<UserSettingsEncrypted>> => {
       return this.makeRequest<ApiResponse<UserSettingsEncrypted>>('/api/user-settings', {
         method: 'PUT',
         body: JSON.stringify(request),

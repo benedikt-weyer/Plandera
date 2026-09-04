@@ -59,8 +59,13 @@ where
     deks::upsert_wrapped_deks(db, wraps, now).await
 }
 
-/// Replaces every wrap for a resource whose DEK was just regenerated
-/// (an update that re-encrypted the payload).
+/// Upserts wraps for a resource on update — including when the DEK was
+/// just regenerated (a content-changing edit re-encrypts under a fresh DEK
+/// and must resend every recipient's wrap of it, which this then merges
+/// in). Deliberately *not* delete-then-insert: a caller rewrapping for just
+/// one principal (e.g. migrating the owner's own wrap after a password
+/// change) must not destroy any other principal's still-valid wrap for the
+/// same resource.
 pub async fn replace_wraps<C>(
     db: &C,
     resource_id: Uuid,
@@ -70,7 +75,6 @@ pub async fn replace_wraps<C>(
 where
     C: ConnectionTrait,
 {
-    deks::delete_wrapped_deks_for_resource(db, resource_id).await?;
     insert_wraps(db, resource_id, payloads, now).await
 }
 
