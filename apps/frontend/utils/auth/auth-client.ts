@@ -1,5 +1,4 @@
 // Client-side authentication functions
-import { hashPasswordForAuth } from "@/utils/cryptography/encryption";
 import { getBackend } from "@/utils/api/backend-interface";
 
 export const signUpClient = async (formData: FormData): Promise<{ error?: string; success?: string }> => {
@@ -94,13 +93,10 @@ export const resetPasswordClient = async (formData: FormData): Promise<{ error?:
     return { error: "Passwords do not match" };
   }
 
-  // Hash the new password for authentication
-  const authHash = hashPasswordForAuth(password);
-
   try {
     const backend = getBackend();
     const { error } = await backend.auth.updatePassword({
-      password: authHash,
+      password,
     });
 
     if (error) {

@@ -11,7 +11,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { hashPasswordForAuth } from "@/utils/cryptography/encryption";
 
 // Define the schema for form validation
 const signUpSchema = z.object({
@@ -50,13 +49,13 @@ function SignUpForm() {
   }, [searchParams]);
 
   const onSubmit = async (values: SignUpFormValues) => {
-    // Hash the password for authentication with backend
-    const authHash = hashPasswordForAuth(values.password);
-    
+    // The master password never leaves the browser as-is: signUpClient
+    // (via the backend implementation) derives the auth key and KEK
+    // keypair from it locally before anything is sent to the server.
     const formData = new FormData();
     formData.append('email', values.email);
-    formData.append('password', authHash);
-    
+    formData.append('password', values.password);
+
     const result = await signUpClient(formData);
     
     if (result.error) {

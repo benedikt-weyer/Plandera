@@ -9,6 +9,7 @@ import { ImportSection } from './import-section';
 import { DeleteSection } from './delete-section';
 import { FixSection } from './fix-section';
 import { PreferencesSection } from './preferences-section';
+import { ApiUsersSection } from './api-users-section';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export function SettingsMain() {
@@ -40,15 +41,20 @@ export function SettingsMain() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="preferences" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="preferences">{t('settings.preferences')}</TabsTrigger>
+          <TabsTrigger value="apiUsers">API Users</TabsTrigger>
           <TabsTrigger value="data">{t('settings.dataManagement')}</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="preferences" className="space-y-4">
           <PreferencesSection />
         </TabsContent>
-        
+
+        <TabsContent value="apiUsers" className="space-y-4">
+          <ApiUsersSection />
+        </TabsContent>
+
         <TabsContent value="data" className="space-y-4">
           <ExportSection encryptionKey={encryptionKey} />
           <ImportSection encryptionKey={encryptionKey} />

@@ -1,178 +1,119 @@
+/**
+ * @jest-environment node
+ *
+ * The e2ee-auth/libsodium stack constructs typed arrays that must be
+ * `instanceof` the same realm's Uint8Array the crypto library checks
+ * against; jsdom's testEnvironment runs test code in a separate VM
+ * context with its own globals, so this file opts into the plain node
+ * environment instead (it has no DOM dependency anyway).
+ */
 import {
-  deriveKeyFromPassword,
-  encryptData,
-  decryptData,
-  generateSalt,
-  generateIV,
-  hashPassword,
-  hashPasswordForAuth,
-  hashPasswordForEncryption
+  createPasswordSalt,
+  cryptKeyFromHex,
+  cryptKeyToHex,
+  decryptBlobWithPassword,
+  decryptJsonWithWrappedDek,
+  deriveCredentials,
+  deriveKekKeyPair,
+  encryptBlobWithPassword,
+  encryptJsonForRecipients,
 } from '@/utils/cryptography/encryption';
 
-describe('Encryption Utilities', () => {
-  describe('hashPassword (legacy)', () => {
-    it('should create a deterministic hash from a password', () => {
-      const password = 'testPassword123';
-      const hash1 = hashPassword(password);
-      const hash2 = hashPassword(password);
-      
-      expect(hash1).toBe(hash2);
-      expect(hash1.length).toBeGreaterThan(0);
+describe('E2EE crypto utilities', () => {
+  describe('deriveCredentials', () => {
+    it('derives the same authKey/cryptKey for the same email/password/salt', async () => {
+      const saltHex = await createPasswordSalt();
+      const a = await deriveCredentials('user@example.com', 'correct horse battery staple', saltHex);
+      const b = await deriveCredentials('USER@example.com  ', 'correct horse battery staple', saltHex);
+
+      expect(a.authKey).toBe(b.authKey);
+      expect(cryptKeyToHex(a.cryptKey)).toBe(cryptKeyToHex(b.cryptKey));
+      expect(a.email).toBe('user@example.com');
     });
-    
-    it('should create different hashes for different passwords', () => {
-      const password1 = 'testPassword123';
-      const password2 = 'testPassword124';
-      
-      const hash1 = hashPassword(password1);
-      const hash2 = hashPassword(password2);
-      
-      expect(hash1).not.toBe(hash2);
+
+    it('derives different credentials for a different password', async () => {
+      const saltHex = await createPasswordSalt();
+      const a = await deriveCredentials('user@example.com', 'password one', saltHex);
+      const b = await deriveCredentials('user@example.com', 'password two', saltHex);
+
+      expect(a.authKey).not.toBe(b.authKey);
     });
   });
 
-  describe('hashPasswordForAuth', () => {
-    it('should create a deterministic hash from a password for authentication', () => {
-      const password = 'testPassword123';
-      const hash1 = hashPasswordForAuth(password);
-      const hash2 = hashPasswordForAuth(password);
-      
-      expect(hash1).toBe(hash2);
-      expect(hash1.length).toBeGreaterThan(0);
-    });
-    
-    it('should create different hashes for different passwords', () => {
-      const password1 = 'testPassword123';
-      const password2 = 'testPassword124';
-      
-      const hash1 = hashPasswordForAuth(password1);
-      const hash2 = hashPasswordForAuth(password2);
-      
-      expect(hash1).not.toBe(hash2);
+  describe('cryptKeyToHex / cryptKeyFromHex', () => {
+    it('round-trips a crypt key through hex', async () => {
+      const saltHex = await createPasswordSalt();
+      const { cryptKey } = await deriveCredentials('user@example.com', 'a password', saltHex);
+
+      const hex = cryptKeyToHex(cryptKey);
+      const restored = cryptKeyFromHex(hex);
+
+      expect(cryptKeyToHex(restored)).toBe(hex);
     });
   });
 
-  describe('hashPasswordForEncryption', () => {
-    it('should create a deterministic hash from a password for encryption', () => {
-      const password = 'testPassword123';
-      const hash1 = hashPasswordForEncryption(password);
-      const hash2 = hashPasswordForEncryption(password);
-      
-      expect(hash1).toBe(hash2);
-      expect(hash1.length).toBeGreaterThan(0);
+  describe('per-record DEK encryption (multi-recipient)', () => {
+    it('encrypts once and lets every recipient decrypt with their own cryptKey', async () => {
+      const ownerSalt = await createPasswordSalt();
+      const owner = await deriveCredentials('owner@example.com', 'owner password', ownerSalt);
+      const ownerKek = await deriveKekKeyPair(owner.cryptKey);
+
+      const apiUserSalt = await createPasswordSalt();
+      const apiUser = await deriveCredentials('api-user@example.com', 'a random api token', apiUserSalt);
+      const apiUserKek = await deriveKekKeyPair(apiUser.cryptKey);
+
+      const payload = await encryptJsonForRecipients(
+        { content: 'secret task', completed: false },
+        { [owner.email]: ownerKek.kekPublicKey, [apiUser.email]: apiUserKek.kekPublicKey },
+      );
+
+      expect(payload.wrapped_deks).toHaveLength(2);
+
+      const ownerWrap = payload.wrapped_deks.find((w) => w.user_id === owner.email)!;
+      const apiUserWrap = payload.wrapped_deks.find((w) => w.user_id === apiUser.email)!;
+
+      const ownerView = await decryptJsonWithWrappedDek<{ content: string; completed: boolean }>(
+        payload,
+        ownerWrap,
+        owner.cryptKey,
+      );
+      const apiUserView = await decryptJsonWithWrappedDek<{ content: string; completed: boolean }>(
+        payload,
+        apiUserWrap,
+        apiUser.cryptKey,
+      );
+
+      expect(ownerView).toEqual({ content: 'secret task', completed: false });
+      expect(apiUserView).toEqual({ content: 'secret task', completed: false });
     });
-    
-    it('should create different hashes for different passwords', () => {
-      const password1 = 'testPassword123';
-      const password2 = 'testPassword124';
-      
-      const hash1 = hashPasswordForEncryption(password1);
-      const hash2 = hashPasswordForEncryption(password2);
-      
-      expect(hash1).not.toBe(hash2);
-    });
-    
-    it('should create different hashes for auth vs encryption with same password', () => {
-      const password = 'testPassword123';
-      const authHash = hashPasswordForAuth(password);
-      const encryptionHash = hashPasswordForEncryption(password);
-      
-      expect(authHash).not.toBe(encryptionHash);
-    });
-  });
-  
-  describe('deriveKeyFromPassword', () => {
-    it('should derive consistent keys from the same password and salt', () => {
-      const password = 'testPassword123';
-      const salt = 'testSalt123';
-      
-      const key1 = deriveKeyFromPassword(password, salt);
-      const key2 = deriveKeyFromPassword(password, salt);
-      
-      expect(key1).toBe(key2);
-      expect(key1.length).toBeGreaterThan(0);
-    });
-    
-    it('should derive different keys with different salts', () => {
-      const password = 'testPassword123';
-      const salt1 = 'testSalt123';
-      const salt2 = 'testSalt456';
-      
-      const key1 = deriveKeyFromPassword(password, salt1);
-      const key2 = deriveKeyFromPassword(password, salt2);
-      
-      expect(key1).not.toBe(key2);
+
+    it('fails to decrypt with the wrong recipient wrap', async () => {
+      const ownerSalt = await createPasswordSalt();
+      const owner = await deriveCredentials('owner2@example.com', 'owner password', ownerSalt);
+      const ownerKek = await deriveKekKeyPair(owner.cryptKey);
+
+      const strangerSalt = await createPasswordSalt();
+      const stranger = await deriveCredentials('stranger@example.com', 'stranger password', strangerSalt);
+
+      const payload = await encryptJsonForRecipients({ secret: true }, { [owner.email]: ownerKek.kekPublicKey });
+      const ownerWrap = payload.wrapped_deks[0];
+
+      await expect(decryptJsonWithWrappedDek(payload, ownerWrap, stranger.cryptKey)).rejects.toThrow();
     });
   });
-  
-  describe('generateSalt and generateIV', () => {
-    it('should generate random salt values', () => {
-      const salt1 = generateSalt();
-      const salt2 = generateSalt();
-      
-      expect(salt1).not.toBe(salt2);
-      expect(salt1.length).toBeGreaterThan(0);
+
+  describe('encryptBlobWithPassword / decryptBlobWithPassword', () => {
+    it('round-trips an arbitrary JSON blob under a password', async () => {
+      const data = { hello: 'world', numbers: [1, 2, 3] };
+      const blob = await encryptBlobWithPassword(data, 'export password');
+
+      const decrypted = await decryptBlobWithPassword<typeof data>(blob, 'export password');
+      expect(decrypted).toEqual(data);
     });
-    
-    it('should generate random IV values', () => {
-      const iv1 = generateIV();
-      const iv2 = generateIV();
-      
-      expect(iv1).not.toBe(iv2);
-      expect(iv1.length).toBeGreaterThan(0);
-    });
-  });
-  
-  describe('encryptData and decryptData', () => {
-    it('should encrypt and decrypt data correctly', () => {
-      const testData = { content: 'Test item', completed: false };
-      const password = 'testPassword123';
-      const salt = generateSalt();
-      const iv = generateIV();
-      const key = deriveKeyFromPassword(password, salt);
-      
-      const encryptedData = encryptData(testData, key, iv);
-      
-      expect(encryptedData).toBeTruthy();
-      expect(typeof encryptedData).toBe('string');
-      
-      const decryptedData = decryptData(encryptedData, key, iv);
-      
-      expect(decryptedData).toEqual(testData);
-    });
-    
-    it('should fail to decrypt with an incorrect key', () => {
-      const testData = { content: 'Test item', completed: false };
-      const password1 = 'testPassword123';
-      const password2 = 'incorrectPassword';
-      const salt = generateSalt();
-      const iv = generateIV();
-      
-      const key1 = deriveKeyFromPassword(password1, salt);
-      const key2 = deriveKeyFromPassword(password2, salt);
-      
-      const encryptedData = encryptData(testData, key1, iv);
-      const decryptedData = decryptData(encryptedData, key2, iv, true); // Silence errors
-      
-      expect(decryptedData).toBeNull();
-    });
-    
-    it('should fail to decrypt with an invalid IV format', () => {
-      const testData = { content: 'Test item', completed: false };
-      const password = 'testPassword123';
-      const salt = generateSalt();
-      const iv1 = generateIV();
-      // Using an invalid format for IV that will cause the parsing to fail
-      const invalidIv = 'not-a-valid-hex-iv';
-      
-      const key = deriveKeyFromPassword(password, salt);
-      
-      const encryptedData = encryptData(testData, key, iv1);
-      
-      // This should return null because the IV is not valid hex
-      const decryptedData = decryptData(encryptedData, key, invalidIv, true); // Silence errors
-      
-      expect(decryptedData).toBeNull();
+
+    it('fails to decrypt with the wrong password', async () => {
+      const blob = await encryptBlobWithPassword({ a: 1 }, 'right password');
+      await expect(decryptBlobWithPassword(blob, 'wrong password')).rejects.toThrow();
     });
   });
 });

@@ -1,8 +1,9 @@
 pub mod auth;
-pub mod projects;
-pub mod can_do_list;
-pub mod calendars;
 pub mod calendar_events;
+pub mod calendars;
+pub mod can_do_list;
 pub mod countdowns;
+pub mod dek_support;
 pub mod health;
+pub mod projects;
 pub mod user_settings;

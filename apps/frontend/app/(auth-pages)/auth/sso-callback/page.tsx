@@ -3,8 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { validateSSOToken, retrieveAndClearSSOToken, exchangeSSOToken } from '@/utils/auth/sso-utils';
-import { hashPasswordForEncryption, storeEncryptionKey } from '@/utils/cryptography/encryption';
+import { validateSSOToken, retrieveAndClearSSOToken } from '@/utils/auth/sso-utils';
 
 function SSOCallbackContent() {
   const router = useRouter();
@@ -35,36 +34,11 @@ function SSOCallbackContent() {
           return;
         }
 
-        setStatus('Setting up encryption...');
-        
-        // For SSO users, we need to derive an encryption key
-        // We'll use the user's ID and email as a basis
-        // NOTE: This is a simplified approach. In production, you might want
-        // to prompt the user for a master password or use a different key derivation method
-        const keyMaterial = `${validation.user.id}-${validation.user.email}-${ssoToken}`;
-        const encryptionKey = hashPasswordForEncryption(keyMaterial);
-        storeEncryptionKey(encryptionKey);
-
-        setStatus('Connecting to Plandera...');
-        
-        // Exchange SSO token for scheduler auth token
-        const backendURL = process.env.NEXT_PUBLIC_BACKEND_HTTP_URL || 'http://localhost:3001';
-        const exchange = await exchangeSSOToken(ssoToken, backendURL);
-        
-        if (exchange.error || !exchange.token) {
-          setError(exchange.error || 'Failed to authenticate with Plandera');
-          return;
-        }
-
-        // Store the scheduler auth token
-        localStorage.setItem('auth_token', exchange.token);
-        
-        setStatus('Success! Redirecting...');
-        
-        // Small delay before redirect to show success message
-        setTimeout(() => {
-          router.push('/home');
-        }, 500);
+        // Plandera's E2EE crypt key can only be derived from the account's
+        // own master password (never from SSO material) — SSO can carry
+        // authentication, but not the key needed to decrypt this account's
+        // data. There is no cryptographically sound way to bridge that here.
+        setError('Sign in with the account password to unlock encrypted data — SSO sign-in is not supported for this app.');
       } catch (err) {
         console.error('SSO callback error:', err);
         setError('An unexpected error occurred during authentication');

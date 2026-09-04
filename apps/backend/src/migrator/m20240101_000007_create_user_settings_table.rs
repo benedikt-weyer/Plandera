@@ -17,7 +17,11 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(UserSettings::EncryptedData).text().not_null())
+                    .col(
+                        ColumnDef::new(UserSettings::EncryptedData)
+                            .text()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(UserSettings::Iv).text().not_null())
                     .col(ColumnDef::new(UserSettings::Salt).text().not_null())
                     .col(
@@ -78,4 +82,3 @@ enum Users {
     Table,
     Id,
 }
-

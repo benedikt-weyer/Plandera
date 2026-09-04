@@ -7,8 +7,6 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-import { hashPasswordForAuth, hashPasswordForEncryption, storeEncryptionKey } from "@/utils/cryptography/encryption";
-
 import { useState, useEffect, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -56,18 +54,14 @@ function SignInForm() {
     setMessage(null);
     
     try {
-      // Hash the password for authentication with backend
-      const authHash = hashPasswordForAuth(values.password);
-      
-      // Hash the password for encryption and store it in a cookie for client-side encryption
-      const encryptionKey = hashPasswordForEncryption(values.password);
-      storeEncryptionKey(encryptionKey);
-      
-      // Create and submit the form data with the hashed password for authentication
+      // The master password never leaves the browser as-is: signInClient
+      // (via the backend implementation) fetches the account's salt,
+      // derives the auth key and crypt key locally, and only sends the
+      // derived auth key to the server.
       const formData = new FormData();
       formData.append('email', values.email);
-      formData.append('password', authHash);
-      
+      formData.append('password', values.password);
+
       const result = await signInClient(formData);
       
       if (result.error) {

@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde_json::json;
 use thiserror::Error;
@@ -10,26 +10,25 @@ use thiserror::Error;
 pub enum AppError {
     #[error("Database error: {0}")]
     Database(Box<dyn std::error::Error + Send + Sync>),
-    
+
     #[error("Authentication error: {0}")]
     Auth(String),
-    
+
     #[error("Validation error: {0}")]
     Validation(String),
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
-    
-    
+
     #[error("JWT error: {0}")]
     Jwt(#[from] jsonwebtoken::errors::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error("SeaORM error: {0}")]
     SeaOrm(#[from] sea_orm::DbErr),
-    
+
     #[error("Internal server error: {0}")]
     Internal(String),
 }
@@ -48,7 +47,10 @@ impl IntoResponse for AppError {
             AppError::Serialization(_) => (StatusCode::BAD_REQUEST, "Invalid data format"),
             AppError::SeaOrm(ref err) => {
                 tracing::error!("SeaORM error: {:?}", err);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Database operation failed")
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Database operation failed",
+                )
             }
             AppError::Internal(ref err) => {
                 tracing::error!("Internal error: {:?}", err);

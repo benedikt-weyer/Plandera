@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, Set};
+use sea_orm::{Set, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -7,9 +7,10 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
-    pub encrypted_data: String,
-    pub iv: String,
-    pub salt: String,
+    pub algorithm: String,
+    pub ciphertext_hex: String,
+    pub nonce_hex: String,
+    pub version: i32,
     pub is_default: bool,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

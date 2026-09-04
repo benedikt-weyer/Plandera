@@ -2,7 +2,7 @@
 
 import { getBackend } from '@/utils/api/backend-interface';
 import { getDecryptedBackend } from '@/utils/api/decrypted-backend';
-import { decryptData, deriveKeyFromPassword } from '@/utils/cryptography/encryption';
+import { decryptJsonWithWrappedDek, getStoredCryptKey } from '@/utils/cryptography/encryption';
 import {
   CanDoItemDecrypted,
   CanDoItemEncrypted,
@@ -98,20 +98,25 @@ export interface DecryptedExportData {
 
 // Decrypt a raw (ciphertext) export into plaintext form, mirroring the fields each
 // resource actually stores encrypted (see DecryptedBackendImpl's decrypt* methods).
-export function decryptExportedData(rawData: ExportedData, encryptionKey: string): DecryptedExportData {
-  const decryptItem = (item: any): any | null => {
+export async function decryptExportedData(rawData: ExportedData): Promise<DecryptedExportData> {
+  const cryptKey = getStoredCryptKey();
+  if (!cryptKey) {
+    throw new Error('Encryption key not available. User must be logged in.');
+  }
+
+  const decryptItem = async (item: any): Promise<any | null> => {
+    if (!item.wrapped_dek) return null;
     try {
-      const key = deriveKeyFromPassword(encryptionKey, item.salt);
-      return decryptData(item.encrypted_data, key, item.iv) || null;
+      return await decryptJsonWithWrappedDek(item, item.wrapped_dek, cryptKey);
     } catch (error) {
       console.error('Failed to decrypt item:', error);
       return null;
     }
   };
 
-  const tasks: DecryptedTask[] = (rawData.data.can_do_list || [])
-    .map((task: any) => {
-      const decrypted = decryptItem(task);
+  const tasks: DecryptedTask[] = (await Promise.all((rawData.data.can_do_list || [])
+    .map(async (task: any) => {
+      const decrypted = await decryptItem(task);
       if (!decrypted) return null;
       return {
         id: task.id,
@@ -131,12 +136,12 @@ export function decryptExportedData(rawData: ExportedData, encryptionKey: string
         updatedAt: task.updated_at,
         user_id: task.user_id,
       };
-    })
+    })))
     .filter((task): task is NonNullable<typeof task> => task !== null);
 
-  const projects: DecryptedProject[] = (rawData.data.projects || [])
-    .map((project: any) => {
-      const decrypted = decryptItem(project);
+  const projects: DecryptedProject[] = (await Promise.all((rawData.data.projects || [])
+    .map(async (project: any) => {
+      const decrypted = await decryptItem(project);
       if (!decrypted) return null;
       return {
         id: project.id,
@@ -150,12 +155,12 @@ export function decryptExportedData(rawData: ExportedData, encryptionKey: string
         updatedAt: project.updated_at,
         user_id: project.user_id,
       };
-    })
+    })))
     .filter((project): project is NonNullable<typeof project> => project !== null);
 
-  const calendars: DecryptedCalendar[] = (rawData.data.calendars || [])
-    .map((calendar: any) => {
-      const decrypted = decryptItem(calendar);
+  const calendars: DecryptedCalendar[] = (await Promise.all((rawData.data.calendars || [])
+    .map(async (calendar: any) => {
+      const decrypted = await decryptItem(calendar);
       if (!decrypted) return null;
       return {
         id: calendar.id,
@@ -170,12 +175,12 @@ export function decryptExportedData(rawData: ExportedData, encryptionKey: string
         updatedAt: calendar.updated_at,
         user_id: calendar.user_id,
       };
-    })
+    })))
     .filter((calendar): calendar is NonNullable<typeof calendar> => calendar !== null);
 
-  const calendarEvents: DecryptedCalendarEvent[] = (rawData.data.calendar_events || [])
-    .map((event: any) => {
-      const decrypted = decryptItem(event);
+  const calendarEvents: DecryptedCalendarEvent[] = (await Promise.all((rawData.data.calendar_events || [])
+    .map(async (event: any) => {
+      const decrypted = await decryptItem(event);
       if (!decrypted) return null;
 
       let recurrencePattern = undefined;
@@ -215,12 +220,12 @@ export function decryptExportedData(rawData: ExportedData, encryptionKey: string
         updatedAt: event.updated_at,
         user_id: event.user_id,
       };
-    })
+    })))
     .filter((event): event is NonNullable<typeof event> => event !== null);
 
-  const countdowns: DecryptedCountdown[] = (rawData.data.countdowns || [])
-    .map((countdown: any) => {
-      const decrypted = decryptItem(countdown);
+  const countdowns: DecryptedCountdown[] = (await Promise.all((rawData.data.countdowns || [])
+    .map(async (countdown: any) => {
+      const decrypted = await decryptItem(countdown);
       if (!decrypted) return null;
       return {
         id: countdown.id,
@@ -231,11 +236,11 @@ export function decryptExportedData(rawData: ExportedData, encryptionKey: string
         updatedAt: countdown.updated_at,
         user_id: countdown.user_id,
       };
-    })
+    })))
     .filter((countdown): countdown is NonNullable<typeof countdown> => countdown !== null);
 
-  const userSettings: UserSettingsDecrypted | undefined = rawData.data.user_settings?.encrypted_data
-    ? decryptItem(rawData.data.user_settings) || undefined
+  const userSettings: UserSettingsDecrypted | undefined = rawData.data.user_settings?.ciphertext_hex
+    ? (await decryptItem(rawData.data.user_settings)) || undefined
     : undefined;
 
   return {
@@ -302,8 +307,8 @@ export async function exportUserData(): Promise<ExportedData> {
 
 // Import (encrypted-format) user data: decrypt it with the current session's key, then
 // run it through the same ID-remapping importer as the decrypted format.
-export async function importUserData(data: ExportedData, encryptionKey: string): Promise<void> {
-  return importDecryptedUserData(decryptExportedData(data, encryptionKey), encryptionKey);
+export async function importUserData(data: ExportedData): Promise<void> {
+  return importDecryptedUserData(await decryptExportedData(data));
 }
 
 // Clear all user data
@@ -365,7 +370,7 @@ export async function clearAllUserData(): Promise<void> {
 // relationships between records (project nesting, task blocking, event->calendar links,
 // countdown->event links, etc.) survive the round trip instead of pointing at IDs that no
 // longer exist.
-export async function importDecryptedUserData(data: DecryptedExportData, encryptionKey: string): Promise<void> {
+export async function importDecryptedUserData(data: DecryptedExportData): Promise<void> {
   const backend = getDecryptedBackend();
 
   const projectIdMap = new Map<string, string>();

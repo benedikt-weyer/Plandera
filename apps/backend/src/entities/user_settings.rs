@@ -6,12 +6,14 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub user_id: Uuid,
-    
-    // Encrypted settings JSON components
-    pub encrypted_data: String,
-    pub iv: String,
-    pub salt: String,
-    
+
+    // Encrypted settings JSON, under a DEK stored in the `deks` table
+    // (resource_id = user_id, since this row is a per-user singleton).
+    pub algorithm: String,
+    pub ciphertext_hex: String,
+    pub nonce_hex: String,
+    pub version: i32,
+
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }
@@ -33,4 +35,3 @@ impl Related<super::users::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
-

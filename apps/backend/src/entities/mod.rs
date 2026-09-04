@@ -1,8 +1,11 @@
-pub mod prelude;
-pub mod users;
-pub mod user_settings;
-pub mod projects;
-pub mod can_do_list;
-pub mod calendars;
+pub mod api_users;
 pub mod calendar_events;
+pub mod calendars;
+pub mod can_do_list;
 pub mod countdowns;
+pub mod deks;
+pub mod kek_metadata;
+pub mod prelude;
+pub mod projects;
+pub mod user_settings;
+pub mod users;

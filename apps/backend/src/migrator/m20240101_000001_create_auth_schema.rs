@@ -11,7 +11,7 @@ impl MigrationTrait for Migration {
             .get_connection()
             .execute_unprepared("CREATE SCHEMA IF NOT EXISTS auth;")
             .await?;
-        
+
         Ok(())
     }
 
@@ -21,7 +21,7 @@ impl MigrationTrait for Migration {
             .get_connection()
             .execute_unprepared("DROP SCHEMA IF EXISTS auth CASCADE;")
             .await?;
-        
+
         Ok(())
     }
 }

@@ -1,57 +1,69 @@
-use axum::{
-    extract::State,
-    response::Json,
-};
-use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, QueryFilter, ColumnTrait};
+use axum::{extract::State, response::Json};
+use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    auth::AuthenticatedUser,
     entities::{prelude::*, user_settings},
     errors::Result,
-    middleware::auth::AuthUser,
-    models::ApiResponse,
+    handlers::dek_support,
+    models::{ApiResponse, WrappedDekPayload},
     state::AppState,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserSettingsRequest {
-    pub encrypted_data: String,
-    pub iv: String,
-    pub salt: String,
+    pub algorithm: String,
+    pub ciphertext_hex: String,
+    pub nonce_hex: String,
+    pub version: i32,
+    pub wrapped_deks: Vec<WrappedDekPayload>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct UserSettingsResponse {
-    pub encrypted_data: String,
-    pub iv: String,
-    pub salt: String,
+    pub algorithm: String,
+    pub ciphertext_hex: String,
+    pub nonce_hex: String,
+    pub version: i32,
+    pub wrapped_dek: Option<WrappedDekPayload>,
 }
 
-/// Get user settings
+/// Get user settings. The singleton row's `resource_id` in the shared
+/// `deks` table is the owner's user id.
 pub async fn get_user_settings(
     State(app_state): State<AppState>,
-    auth_user: AuthUser,
+    authenticated_user: AuthenticatedUser,
 ) -> Result<Json<ApiResponse<UserSettingsResponse>>> {
-    // Try to find existing settings
     let settings = UserSettings::find()
-        .filter(user_settings::Column::UserId.eq(auth_user.0.id))
+        .filter(user_settings::Column::UserId.eq(authenticated_user.owner_user_id))
         .one(&app_state.db.connection)
         .await?;
 
     let response = match settings {
-        Some(settings) => UserSettingsResponse {
-            encrypted_data: settings.encrypted_data,
-            iv: settings.iv,
-            salt: settings.salt,
-        },
-        None => {
-            // Return empty encrypted data if settings don't exist
+        Some(settings) => {
+            let wrapped_dek = dek_support::attach_current_wrap(
+                &app_state.db.connection,
+                authenticated_user.owner_user_id,
+                authenticated_user.principal_id,
+            )
+            .await?;
+
             UserSettingsResponse {
-                encrypted_data: String::from("{}"),
-                iv: String::new(),
-                salt: String::new(),
+                algorithm: settings.algorithm,
+                ciphertext_hex: settings.ciphertext_hex,
+                nonce_hex: settings.nonce_hex,
+                version: settings.version,
+                wrapped_dek,
             }
         }
+        None => UserSettingsResponse {
+            algorithm: String::new(),
+            ciphertext_hex: String::new(),
+            nonce_hex: String::new(),
+            version: 0,
+            wrapped_dek: None,
+        },
     };
 
     Ok(Json(ApiResponse {
@@ -60,15 +72,23 @@ pub async fn get_user_settings(
     }))
 }
 
-/// Update user settings
+/// Update (or create) user settings.
 pub async fn update_user_settings(
     State(app_state): State<AppState>,
-    auth_user: AuthUser,
+    authenticated_user: AuthenticatedUser,
     Json(payload): Json<UserSettingsRequest>,
 ) -> Result<Json<ApiResponse<UserSettingsResponse>>> {
-    // Check if settings already exist
+    dek_support::validate_payload(
+        &payload.algorithm,
+        &payload.ciphertext_hex,
+        &payload.nonce_hex,
+        payload.version,
+        "payload",
+    )?;
+    dek_support::require_wraps(&payload.wrapped_deks)?;
+
     let existing_settings = UserSettings::find()
-        .filter(user_settings::Column::UserId.eq(auth_user.0.id))
+        .filter(user_settings::Column::UserId.eq(authenticated_user.owner_user_id))
         .one(&app_state.db.connection)
         .await?;
 
@@ -76,21 +96,21 @@ pub async fn update_user_settings(
 
     let settings = match existing_settings {
         Some(existing) => {
-            // Update existing settings
             let mut active_model: user_settings::ActiveModel = existing.into();
-            active_model.encrypted_data = ActiveValue::Set(payload.encrypted_data.clone());
-            active_model.iv = ActiveValue::Set(payload.iv.clone());
-            active_model.salt = ActiveValue::Set(payload.salt.clone());
+            active_model.algorithm = ActiveValue::Set(payload.algorithm.clone());
+            active_model.ciphertext_hex = ActiveValue::Set(payload.ciphertext_hex.clone());
+            active_model.nonce_hex = ActiveValue::Set(payload.nonce_hex.clone());
+            active_model.version = ActiveValue::Set(payload.version);
             active_model.updated_at = ActiveValue::Set(now);
             active_model.update(&app_state.db.connection).await?
         }
         None => {
-            // Create new settings
             let active_model = user_settings::ActiveModel {
-                user_id: ActiveValue::Set(auth_user.0.id),
-                encrypted_data: ActiveValue::Set(payload.encrypted_data.clone()),
-                iv: ActiveValue::Set(payload.iv.clone()),
-                salt: ActiveValue::Set(payload.salt.clone()),
+                user_id: ActiveValue::Set(authenticated_user.owner_user_id),
+                algorithm: ActiveValue::Set(payload.algorithm.clone()),
+                ciphertext_hex: ActiveValue::Set(payload.ciphertext_hex.clone()),
+                nonce_hex: ActiveValue::Set(payload.nonce_hex.clone()),
+                version: ActiveValue::Set(payload.version),
                 created_at: ActiveValue::Set(now),
                 updated_at: ActiveValue::Set(now),
             };
@@ -98,13 +118,29 @@ pub async fn update_user_settings(
         }
     };
 
+    let now_fixed = chrono::Utc::now().fixed_offset();
+    dek_support::replace_wraps(
+        &app_state.db.connection,
+        authenticated_user.owner_user_id,
+        &payload.wrapped_deks,
+        now_fixed,
+    )
+    .await?;
+    let own_wrap = dek_support::attach_current_wrap(
+        &app_state.db.connection,
+        authenticated_user.owner_user_id,
+        authenticated_user.principal_id,
+    )
+    .await?;
+
     Ok(Json(ApiResponse {
         data: UserSettingsResponse {
-            encrypted_data: settings.encrypted_data,
-            iv: settings.iv,
-            salt: settings.salt,
+            algorithm: settings.algorithm,
+            ciphertext_hex: settings.ciphertext_hex,
+            nonce_hex: settings.nonce_hex,
+            version: settings.version,
+            wrapped_dek: own_wrap,
         },
         message: None,
     }))
 }
-

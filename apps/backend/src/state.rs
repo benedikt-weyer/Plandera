@@ -1,5 +1,5 @@
-use axum::extract::FromRef;
 use crate::{auth::AuthService, db::Database, websocket::WebSocketState};
+use axum::extract::FromRef;
 
 // Define the shared application state
 #[derive(Clone)]

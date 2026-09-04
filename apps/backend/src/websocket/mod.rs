@@ -1,7 +1,7 @@
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::Response,
 };
@@ -9,10 +9,17 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
 
 use crate::auth::AuthService;
+
+pub fn extract_connection_id(headers: &axum::http::HeaderMap) -> Option<Uuid> {
+    headers
+        .get("x-connection-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| Uuid::parse_str(s).ok())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebSocketMessage {
@@ -41,10 +48,18 @@ impl WebSocketState {
         }
     }
 
-    pub async fn add_connection(&self, user_id: Uuid, connection_id: Uuid, tx: broadcast::Sender<WebSocketMessage>) {
+    pub async fn add_connection(
+        &self,
+        user_id: Uuid,
+        connection_id: Uuid,
+        tx: broadcast::Sender<WebSocketMessage>,
+    ) {
         let mut connections = self.connections.write().await;
         let conn = WebSocketConnection { tx, connection_id };
-        connections.entry(user_id).or_insert_with(Vec::new).push(conn);
+        connections
+            .entry(user_id)
+            .or_insert_with(Vec::new)
+            .push(conn);
     }
 
     pub async fn remove_connection(&self, user_id: &Uuid, connection_id: &Uuid) {
@@ -57,31 +72,56 @@ impl WebSocketState {
         }
     }
 
-    pub async fn broadcast_to_user(&self, user_id: &Uuid, message: WebSocketMessage, exclude_connection_id: Option<Uuid>) {
+    pub async fn broadcast_to_user(
+        &self,
+        user_id: &Uuid,
+        message: WebSocketMessage,
+        exclude_connection_id: Option<Uuid>,
+    ) {
         let connections = self.connections.read().await;
-        tracing::info!("Broadcasting WebSocket message to user {}: {:?}, excluding connection: {:?}", user_id, message, exclude_connection_id);
-        
+        tracing::info!(
+            "Broadcasting WebSocket message to user {}: {:?}, excluding connection: {:?}",
+            user_id,
+            message,
+            exclude_connection_id
+        );
+
         if let Some(user_conns) = connections.get(user_id) {
             let mut sent_count = 0;
             for conn in user_conns {
                 // Skip the connection that initiated the update
                 if let Some(exclude_id) = exclude_connection_id {
                     if conn.connection_id == exclude_id {
-                        tracing::info!("Skipping connection {} (initiator of the update)", exclude_id);
+                        tracing::info!(
+                            "Skipping connection {} (initiator of the update)",
+                            exclude_id
+                        );
                         continue;
                     }
                 }
-                
+
                 if let Err(e) = conn.tx.send(message.clone()) {
-                    tracing::warn!("Failed to send WebSocket message to connection {}: {}", conn.connection_id, e);
+                    tracing::warn!(
+                        "Failed to send WebSocket message to connection {}: {}",
+                        conn.connection_id,
+                        e
+                    );
                 } else {
                     sent_count += 1;
                 }
             }
-            tracing::info!("Successfully sent WebSocket message to {} out of {} connections for user {}", sent_count, user_conns.len(), user_id);
+            tracing::info!(
+                "Successfully sent WebSocket message to {} out of {} connections for user {}",
+                sent_count,
+                user_conns.len(),
+                user_id
+            );
         } else {
             tracing::warn!("No WebSocket connections found for user {}", user_id);
-            tracing::info!("Active connections: {:?}", connections.keys().collect::<Vec<_>>());
+            tracing::info!(
+                "Active connections: {:?}",
+                connections.keys().collect::<Vec<_>>()
+            );
         }
     }
 }
@@ -102,35 +142,53 @@ async fn websocket_connection(
 ) {
     let (mut sender, mut receiver) = socket.split();
     let (tx, mut rx) = broadcast::channel::<WebSocketMessage>(100);
-    
+
     // Generate a unique connection ID for this WebSocket
     let connection_id = Uuid::new_v4();
-    
+
     // Handle authentication
     let mut user_id: Option<Uuid> = None;
-    
+
     // Authentication flow
     if let Some(msg) = receiver.next().await {
         if let Ok(Message::Text(text)) = msg {
             if let Ok(auth_msg) = serde_json::from_str::<serde_json::Value>(&text) {
                 if let Some(token) = auth_msg.get("token").and_then(|t| t.as_str()) {
-                    if let Ok(user) = auth_service.get_user_from_token(token).await {
-                        user_id = Some(user.id);
-                        tracing::info!("WebSocket authentication successful for user: {} with connection_id: {}", user.id, connection_id);
-                        ws_state.add_connection(user.id, connection_id, tx.clone()).await;
-                        
+                    if let Ok(authenticated_user) = auth_service.authenticate_access_token(token) {
+                        let owner_user_id = authenticated_user.owner_user_id;
+                        user_id = Some(owner_user_id);
+                        tracing::info!(
+                            "WebSocket authentication successful for owner: {} with connection_id: {}",
+                            owner_user_id,
+                            connection_id
+                        );
+                        ws_state
+                            .add_connection(owner_user_id, connection_id, tx.clone())
+                            .await;
+
                         // Send authentication success with connection_id
                         let auth_response = serde_json::json!({
                             "type": "auth_success",
-                            "user_id": user.id,
+                            "user_id": owner_user_id,
                             "connection_id": connection_id
                         });
-                        
-                        if sender.send(Message::Text(auth_response.to_string().into())).await.is_err() {
-                            tracing::error!("Failed to send auth success message to user: {}", user.id);
+
+                        if sender
+                            .send(Message::Text(auth_response.to_string().into()))
+                            .await
+                            .is_err()
+                        {
+                            tracing::error!(
+                                "Failed to send auth success message to user: {}",
+                                owner_user_id
+                            );
                             return;
                         }
-                        tracing::info!("Sent auth success message to user: {} with connection_id: {}", user.id, connection_id);
+                        tracing::info!(
+                            "Sent auth success message to user: {} with connection_id: {}",
+                            owner_user_id,
+                            connection_id
+                        );
                     } else {
                         tracing::warn!("WebSocket authentication failed for token");
                     }
@@ -138,20 +196,22 @@ async fn websocket_connection(
             }
         }
     }
-    
+
     if user_id.is_none() {
         // Authentication failed
         let auth_error = serde_json::json!({
             "type": "auth_error",
             "message": "Authentication failed"
         });
-        
-        let _ = sender.send(Message::Text(auth_error.to_string().into())).await;
+
+        let _ = sender
+            .send(Message::Text(auth_error.to_string().into()))
+            .await;
         return;
     }
-    
+
     let user_id = user_id.unwrap();
-    
+
     // Spawn task to handle outgoing messages
     let mut send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
@@ -162,7 +222,7 @@ async fn websocket_connection(
             }
         }
     });
-    
+
     // Handle incoming messages
     let mut recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -170,15 +230,15 @@ async fn websocket_connection(
                 Ok(Message::Text(text)) => {
                     // Handle incoming messages (e.g., subscriptions)
                     tracing::debug!("Received WebSocket message: {}", text);
-                },
+                }
                 Ok(Message::Close(_)) => {
                     break;
-                },
+                }
                 _ => {}
             }
         }
     });
-    
+
     // Wait for either task to finish
     tokio::select! {
         _ = (&mut send_task) => {
@@ -188,8 +248,12 @@ async fn websocket_connection(
             send_task.abort();
         }
     }
-    
+
     // Clean up connection
     ws_state.remove_connection(&user_id, &connection_id).await;
-    tracing::info!("WebSocket connection closed for user: {} with connection_id: {}", user_id, connection_id);
+    tracing::info!(
+        "WebSocket connection closed for user: {} with connection_id: {}",
+        user_id,
+        connection_id
+    );
 }

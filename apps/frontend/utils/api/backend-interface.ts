@@ -32,7 +32,9 @@ import {
   RealtimeSubscription,
   ApiResponse,
   PaginatedResponse,
-  QueryOptions
+  QueryOptions,
+  ApiUser,
+  WrappedDekPayload
 } from './types';
 
 export interface BackendInterface {
@@ -265,6 +267,22 @@ export interface BackendInterface {
      * Update user settings with encrypted data
      */
     update(request: UserSettingsEncrypted): Promise<ApiResponse<UserSettingsEncrypted>>;
+  };
+
+  // Scoped-access secondary login principals ("API users")
+  apiUsers?: {
+    list(): Promise<ApiResponse<ApiUser[]>>;
+    create(request: {
+      apiUserId: string;
+      authKey: string;
+      kekPublicKey: string;
+      encryptedLabel: { algorithm: string; ciphertext_hex: string; nonce_hex: string; version: number };
+      encryptedLabelDeks: WrappedDekPayload[];
+    }): Promise<ApiResponse<ApiUser>>;
+    delete(id: string): Promise<{ error: string | null }>;
+    provisionDeks(apiUserId: string, deks: { resource_id: string; wrapped_dek: WrappedDekPayload }[]): Promise<ApiResponse<ApiUser>>;
+    createApiToken(): Promise<string>;
+    deriveApiTokenCredentials(tokenHex: string): Promise<{ authKey: string; cryptKey: Uint8Array; kekKeyPair: { kekPublicKey: string }; tokenHex: string }>;
   };
 
   // Data import/export methods

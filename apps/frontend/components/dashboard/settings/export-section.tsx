@@ -9,14 +9,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useError } from '@/utils/context/ErrorContext';
 import { useTranslation } from '@/utils/context/LanguageContext';
 import { exportUserData, decryptExportedData, type ExportedData, type DecryptedExportData } from '@/app/settings/api';
-import { encryptData, generateIV, generateSalt, deriveKeyFromPassword } from '@/utils/cryptography/encryption';
+import { encryptBlobWithPassword } from '@/utils/cryptography/encryption';
 import { Download, Lock, Unlock, Copy, FileText } from 'lucide-react';
 
 interface ExportSectionProps {
   encryptionKey: string;
 }
 
-export function ExportSection({ encryptionKey }: ExportSectionProps) {
+export function ExportSection({}: ExportSectionProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [password, setPassword] = useState('');
   const [usePasswordProtection, setUsePasswordProtection] = useState(false);
@@ -42,7 +42,7 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
 
       // Determine what data to export based on format
       if (exportFormat === 'decrypted') {
-        const decryptedData = decryptExportedData(rawData, encryptionKey);
+        const decryptedData = await decryptExportedData(rawData);
         dataToExport = decryptedData;
         setDecryptedExportedData(decryptedData);
         setExportedData(null);
@@ -58,25 +58,20 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
 
       // Handle password protection
       if (usePasswordProtection) {
-        const salt = generateSalt();
-        const iv = generateIV();
-        const derivedKey = deriveKeyFromPassword(password, salt);
-        const encrypted = encryptData(dataToExport, derivedKey, iv);
-        
+        const passwordBlob = await encryptBlobWithPassword(dataToExport, password);
+
         const encryptedPackage = {
-          encrypted_data: encrypted,
-          salt,
-          iv,
+          ...passwordBlob,
           version: '1.0.0',
           created_at: new Date().toISOString(),
           original_format: exportFormat // Track the original format
         };
-        
+
         setEncryptedExport(JSON.stringify(encryptedPackage, null, 2));
-        
+
         // Create and download encrypted file
-        const blob = new Blob([JSON.stringify(encryptedPackage, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
+        const fileBlob = new Blob([JSON.stringify(encryptedPackage, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(fileBlob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `${filename}-password-protected-${new Date().toISOString().split('T')[0]}.json`;

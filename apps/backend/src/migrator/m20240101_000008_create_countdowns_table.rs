@@ -45,7 +45,11 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Countdowns::UserId).uuid().not_null())
                     .col(ColumnDef::new(Countdowns::EventId).uuid().not_null())
-                    .col(ColumnDef::new(Countdowns::EncryptedData).string().not_null())
+                    .col(
+                        ColumnDef::new(Countdowns::EncryptedData)
+                            .string()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Countdowns::Iv).string().not_null())
                     .col(ColumnDef::new(Countdowns::Salt).string().not_null())
                     .col(
@@ -105,7 +109,12 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(Countdowns::Table).if_exists().to_owned())
+            .drop_table(
+                Table::drop()
+                    .table(Countdowns::Table)
+                    .if_exists()
+                    .to_owned(),
+            )
             .await
     }
 }

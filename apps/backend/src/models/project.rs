@@ -1,14 +1,16 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::entities::projects;
 
+use crate::{entities::projects, models::WrappedDekPayload};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProjectRequest {
-    pub encrypted_data: String,
-    pub iv: String,
-    pub salt: String,
+    pub algorithm: String,
+    pub ciphertext_hex: String,
+    pub nonce_hex: String,
+    pub version: i32,
+    pub wrapped_deks: Vec<WrappedDekPayload>,
     pub parent_id: Option<Uuid>,
     pub display_order: Option<i32>,
     pub is_collapsed: Option<bool>,
@@ -16,9 +18,11 @@ pub struct CreateProjectRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateProjectRequest {
-    pub encrypted_data: Option<String>,
-    pub iv: Option<String>,
-    pub salt: Option<String>,
+    pub algorithm: Option<String>,
+    pub ciphertext_hex: Option<String>,
+    pub nonce_hex: Option<String>,
+    pub version: Option<i32>,
+    pub wrapped_deks: Option<Vec<WrappedDekPayload>>,
     pub is_default: Option<bool>,
     pub parent_id: Option<Uuid>,
     pub display_order: Option<i32>,
@@ -29,9 +33,11 @@ pub struct UpdateProjectRequest {
 pub struct ProjectResponse {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub encrypted_data: String,
-    pub iv: String,
-    pub salt: String,
+    pub algorithm: String,
+    pub ciphertext_hex: String,
+    pub nonce_hex: String,
+    pub version: i32,
+    pub wrapped_dek: Option<WrappedDekPayload>,
     pub is_default: bool,
     pub parent_id: Option<Uuid>,
     pub display_order: i32,
@@ -45,9 +51,11 @@ impl From<projects::Model> for ProjectResponse {
         Self {
             id: project.id,
             user_id: project.user_id,
-            encrypted_data: project.encrypted_data,
-            iv: project.iv,
-            salt: project.salt,
+            algorithm: project.algorithm,
+            ciphertext_hex: project.ciphertext_hex,
+            nonce_hex: project.nonce_hex,
+            version: project.version,
+            wrapped_dek: None,
             is_default: project.is_default,
             parent_id: project.parent_id,
             display_order: project.display_order,

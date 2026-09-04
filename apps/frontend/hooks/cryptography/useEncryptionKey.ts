@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
-import { getStoredEncryptionKey, clearStoredEncryptionKey } from '@/utils/cryptography/encryption';
+import { getStoredCryptKey, clearStoredCryptKey, cryptKeyToHex } from '@/utils/cryptography/encryption';
+
+function getStoredEncryptionKey(): string | null {
+  const cryptKey = getStoredCryptKey();
+  return cryptKey ? cryptKeyToHex(cryptKey) : null;
+}
+
+function clearStoredEncryptionKey(): void {
+  clearStoredCryptKey();
+}
 import { getBackend, BackendInterface } from '@/utils/api/backend-interface';
 
 export function useEncryptionKey() {

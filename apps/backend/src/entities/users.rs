@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, Set};
+use sea_orm::{Set, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -8,15 +8,10 @@ pub struct Model {
     pub id: Uuid,
     #[sea_orm(unique)]
     pub email: String,
-    pub encrypted_password: Option<String>,
-    pub email_confirmed_at: Option<DateTimeWithTimeZone>,
+    pub auth_key_hash: String,
+    pub auth_salt: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
-    #[sea_orm(column_type = "Json")]
-    pub raw_app_meta_data: Json,
-    #[sea_orm(column_type = "Json")]
-    pub raw_user_meta_data: Json,
-    pub is_super_admin: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -31,6 +26,8 @@ pub enum Relation {
     CalendarEvents,
     #[sea_orm(has_many = "super::countdowns::Entity")]
     Countdowns,
+    #[sea_orm(has_many = "super::api_users::Entity")]
+    ApiUsers,
 }
 
 impl Related<super::projects::Entity> for Entity {
@@ -63,6 +60,12 @@ impl Related<super::countdowns::Entity> for Entity {
     }
 }
 
+impl Related<super::api_users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ApiUsers.def()
+    }
+}
+
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     fn new() -> Self {
@@ -70,9 +73,6 @@ impl ActiveModelBehavior for ActiveModel {
             id: Set(Uuid::new_v4()),
             created_at: Set(chrono::Utc::now().into()),
             updated_at: Set(chrono::Utc::now().into()),
-            raw_app_meta_data: Set(serde_json::json!({})),
-            raw_user_meta_data: Set(serde_json::json!({})),
-            is_super_admin: Set(false),
             ..ActiveModelTrait::default()
         }
     }

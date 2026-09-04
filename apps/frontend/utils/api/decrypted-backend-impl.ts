@@ -1,7 +1,9 @@
 /**
  * Decrypted Backend Implementation
  * This class implements DecryptedBackendInterface by wrapping BackendInterface
- * and handling encryption/decryption automatically.
+ * and handling encryption/decryption automatically via per-record DEKs
+ * wrapped for every principal (the current user and any linked API users)
+ * who should be able to read the record.
  */
 
 import { DecryptedBackendInterface } from './decrypted-backend-interface';
@@ -45,48 +47,39 @@ import {
   QueryOptions,
 } from './types';
 import {
-  encryptData,
-  decryptData,
-  generateIV,
-  generateSalt,
-  deriveKeyFromPassword,
+  CryptKey,
+  EncryptedRecordPayload,
+  RecordCiphertext,
+  WrappedDekPayload,
+  decryptJsonWithWrappedDek,
+  encryptJsonForRecipients,
 } from '../cryptography/encryption';
+
+type RecordLike = RecordCiphertext & { wrapped_dek?: WrappedDekPayload };
 
 export class DecryptedBackendImpl implements DecryptedBackendInterface {
   constructor(
     private backend: BackendInterface,
-    private encryptionKey: string
+    private cryptKey: CryptKey,
+    /** principal id -> kek public key, for everyone a new/updated record should be readable by. */
+    private recipients: Record<string, string>,
   ) {}
 
-  // Helper methods for encryption/decryption
-  private encryptItemData(data: any): { encrypted_data: string; iv: string; salt: string } {
-    const salt = generateSalt();
-    const iv = generateIV();
-    const derivedKey = deriveKeyFromPassword(this.encryptionKey, salt);
-    const encrypted_data = encryptData(data, derivedKey, iv);
-    return { encrypted_data, iv, salt };
+  // --- generic per-record encrypt/decrypt ---------------------------------
+
+  private async encryptItemData(data: unknown): Promise<EncryptedRecordPayload> {
+    return encryptJsonForRecipients(data, this.recipients);
   }
 
-  private decryptItemData<T>(encrypted: { encrypted_data: string; iv: string; salt: string }): T {
-    const derivedKey = deriveKeyFromPassword(this.encryptionKey, encrypted.salt);
-    return decryptData(encrypted.encrypted_data, derivedKey, encrypted.iv) as T;
+  private async decryptItemData<T>(encrypted: RecordLike): Promise<T> {
+    if (!encrypted.wrapped_dek) {
+      throw new Error('No wrapped DEK available for this principal — access was not granted to this record.');
+    }
+    return decryptJsonWithWrappedDek<T>(encrypted, encrypted.wrapped_dek, this.cryptKey);
   }
 
-  private encryptSettings(data: UserSettingsDecrypted): { encrypted_data: string; iv: string; salt: string } {
-    const salt = generateSalt();
-    const iv = generateIV();
-    const derivedKey = deriveKeyFromPassword(this.encryptionKey, salt);
-    const encrypted_data = encryptData(data, derivedKey, iv);
-    return { encrypted_data, iv, salt };
-  }
-
-  private decryptSettings(encrypted: { encrypted_data: string; iv: string; salt: string }): UserSettingsDecrypted {
-    const derivedKey = deriveKeyFromPassword(this.encryptionKey, encrypted.salt);
-    return decryptData(encrypted.encrypted_data, derivedKey, encrypted.iv) as UserSettingsDecrypted;
-  }
-
-  private decryptCanDoItem(encrypted: CanDoItemEncrypted): CanDoItemDecrypted {
-    const decryptedData = this.decryptItemData<{
+  private async decryptCanDoItem(encrypted: CanDoItemEncrypted): Promise<CanDoItemDecrypted> {
+    const decryptedData = await this.decryptItemData<{
       content: string;
       completed: boolean;
       due_date?: string;
@@ -110,8 +103,8 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     };
   }
 
-  private decryptProject(encrypted: ProjectEncrypted): ProjectDecrypted {
-    const decryptedData = this.decryptItemData<{
+  private async decryptProject(encrypted: ProjectEncrypted): Promise<ProjectDecrypted> {
+    const decryptedData = await this.decryptItemData<{
       name: string;
       description?: string;
       color?: string;
@@ -129,8 +122,8 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     };
   }
 
-  private decryptCalendar(encrypted: CalendarEncrypted): CalendarDecrypted {
-    const decryptedData = this.decryptItemData<{
+  private async decryptCalendar(encrypted: CalendarEncrypted): Promise<CalendarDecrypted> {
+    const decryptedData = await this.decryptItemData<{
       name: string;
       color?: string;
       is_visible: boolean;
@@ -149,8 +142,8 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     };
   }
 
-  private decryptCalendarEvent(encrypted: CalendarEventEncrypted): CalendarEventDecrypted {
-    const decryptedData = this.decryptItemData<{
+  private async decryptCalendarEvent(encrypted: CalendarEventEncrypted): Promise<CalendarEventDecrypted> {
+    const decryptedData = await this.decryptItemData<{
       title: string;
       description?: string;
       location?: string;
@@ -175,8 +168,8 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     };
   }
 
-  private decryptCountdown(encrypted: CountdownEncrypted): CountdownDecrypted {
-    const decryptedData = this.decryptItemData<{
+  private async decryptCountdown(encrypted: CountdownEncrypted): Promise<CountdownDecrypted> {
+    const decryptedData = await this.decryptItemData<{
       target: 'start' | 'end';
       task_id?: string;
     }>(encrypted);
@@ -191,13 +184,19 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     };
   }
 
+  /** Decrypts every item, silently dropping ones this principal has no wrap for. */
+  private async decryptAll<E, D>(items: E[], decrypt: (item: E) => Promise<D>): Promise<D[]> {
+    const results = await Promise.allSettled(items.map(decrypt));
+    return results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+  }
+
   // Can-do list methods implementation
   canDoList = {
     getAll: async (options?: QueryOptions): Promise<PaginatedResponse<CanDoItemDecrypted>> => {
       const response = await this.backend.canDoList.getAll(options);
       return {
         ...response,
-        data: response.data.map(item => this.decryptCanDoItem(item)),
+        data: await this.decryptAll(response.data, (item) => this.decryptCanDoItem(item)),
       };
     },
 
@@ -205,12 +204,12 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.canDoList.getById(id);
       return {
         ...response,
-        data: response.data ? this.decryptCanDoItem(response.data) : null,
+        data: response.data ? await this.decryptCanDoItem(response.data) : null,
       };
     },
 
     create: async (request: CreateCanDoItemDecryptedRequest): Promise<ApiResponse<CanDoItemDecrypted>> => {
-      const { encrypted_data, iv, salt } = this.encryptItemData({
+      const encrypted = await this.encryptItemData({
         content: request.content,
         completed: request.completed ?? false,
         due_date: request.due_date,
@@ -226,41 +225,34 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const encryptedRequest: CreateCanDoItemRequest = {
         project_id: request.project_id,
         display_order: request.display_order ?? 0,
-        encrypted_data,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.canDoList.create(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCanDoItem(response.data) : null,
+        data: response.data ? await this.decryptCanDoItem(response.data) : null,
       };
     },
 
     update: async (request: UpdateCanDoItemDecryptedRequest): Promise<ApiResponse<CanDoItemDecrypted>> => {
-      let encryptedData: string | undefined;
-      let iv: string | undefined;
-      let salt: string | undefined;
+      let encrypted: EncryptedRecordPayload | undefined;
 
-      // Check if any encrypted field is being updated (use 'in' operator to detect property presence)
-      const hasEncryptedFieldUpdate = 
-        'content' in request || 'completed' in request || 
-        'due_date' in request || 'impact' in request || 
-        'urgency' in request || 'tags' in request || 
-        'duration_minutes' in request || 'blocked_by' in request || 
+      const hasEncryptedFieldUpdate =
+        'content' in request || 'completed' in request ||
+        'due_date' in request || 'impact' in request ||
+        'urgency' in request || 'tags' in request ||
+        'duration_minutes' in request || 'blocked_by' in request ||
         'my_day' in request || 'parent_task_id' in request;
 
       if (hasEncryptedFieldUpdate) {
-        // Get current data to merge with updates (preserves fields not being updated)
         const currentResponse = await this.backend.canDoList.getById(request.id);
         if (!currentResponse.data) {
           throw new Error('Task not found');
         }
-        const currentData = this.decryptCanDoItem(currentResponse.data);
-        
-        // Merge current data with updates (PUT-style: use request value even if undefined to clear)
-        const dataToEncrypt: any = {
+        const currentData = await this.decryptCanDoItem(currentResponse.data);
+
+        encrypted = await this.encryptItemData({
           content: 'content' in request ? request.content : currentData.content,
           completed: 'completed' in request ? request.completed : currentData.completed,
           due_date: 'due_date' in request ? request.due_date : currentData.due_date,
@@ -271,27 +263,20 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
           blocked_by: 'blocked_by' in request ? request.blocked_by : currentData.blocked_by,
           my_day: 'my_day' in request ? request.my_day : currentData.my_day,
           parent_task_id: 'parent_task_id' in request ? request.parent_task_id : currentData.parent_task_id,
-        };
-        
-        const encrypted = this.encryptItemData(dataToEncrypt);
-        encryptedData = encrypted.encrypted_data;
-        iv = encrypted.iv;
-        salt = encrypted.salt;
+        });
       }
 
       const encryptedRequest: UpdateCanDoItemRequest = {
         id: request.id,
         project_id: request.project_id,
         display_order: request.display_order,
-        encrypted_data: encryptedData,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.canDoList.update(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCanDoItem(response.data) : null,
+        data: response.data ? await this.decryptCanDoItem(response.data) : null,
       };
     },
 
@@ -300,14 +285,14 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     },
 
     subscribe: (callback: (payload: RealtimeMessage<CanDoItemDecrypted>) => void): RealtimeSubscription => {
-      // Subscribe to encrypted events and decrypt them
       return this.backend.canDoList.subscribe((payload: RealtimeMessage<CanDoItemEncrypted>) => {
-        const decryptedPayload: RealtimeMessage<CanDoItemDecrypted> = {
-          ...payload,
-          new: payload.new ? this.decryptCanDoItem(payload.new) : undefined,
-          old: payload.old ? this.decryptCanDoItem(payload.old) : undefined,
-        };
-        callback(decryptedPayload);
+        void (async () => {
+          callback({
+            ...payload,
+            new: payload.new ? await this.decryptCanDoItem(payload.new) : undefined,
+            old: payload.old ? await this.decryptCanDoItem(payload.old) : undefined,
+          });
+        })();
       });
     },
   };
@@ -318,7 +303,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.projects.getAll(options);
       return {
         ...response,
-        data: response.data.map(item => this.decryptProject(item)),
+        data: await this.decryptAll(response.data, (item) => this.decryptProject(item)),
       };
     },
 
@@ -326,12 +311,12 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.projects.getById(id);
       return {
         ...response,
-        data: response.data ? this.decryptProject(response.data) : null,
+        data: response.data ? await this.decryptProject(response.data) : null,
       };
     },
 
     create: async (request: CreateProjectDecryptedRequest): Promise<ApiResponse<ProjectDecrypted>> => {
-      const { encrypted_data, iv, salt } = this.encryptItemData({
+      const encrypted = await this.encryptItemData({
         name: request.name,
         description: request.description,
         color: request.color,
@@ -341,33 +326,25 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
         parent_id: request.parent_id,
         display_order: request.order ?? 0,
         is_collapsed: request.collapsed ?? false,
-        encrypted_data,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.projects.create(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptProject(response.data) : null,
+        data: response.data ? await this.decryptProject(response.data) : null,
       };
     },
 
     update: async (request: UpdateProjectDecryptedRequest): Promise<ApiResponse<ProjectDecrypted>> => {
-      let encryptedData: string | undefined;
-      let iv: string | undefined;
-      let salt: string | undefined;
+      let encrypted: EncryptedRecordPayload | undefined;
 
-      // Only encrypt if we have content to update
       if (request.name !== undefined || request.description !== undefined || request.color !== undefined) {
-        const encrypted = this.encryptItemData({
+        encrypted = await this.encryptItemData({
           name: request.name,
           description: request.description,
           color: request.color,
         });
-        encryptedData = encrypted.encrypted_data;
-        iv = encrypted.iv;
-        salt = encrypted.salt;
       }
 
       const encryptedRequest: UpdateProjectRequest = {
@@ -375,15 +352,13 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
         parent_id: request.parent_id,
         display_order: request.order,
         is_collapsed: request.collapsed,
-        encrypted_data: encryptedData,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.projects.update(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptProject(response.data) : null,
+        data: response.data ? await this.decryptProject(response.data) : null,
       };
     },
 
@@ -392,14 +367,14 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     },
 
     subscribe: (callback: (payload: RealtimeMessage<ProjectDecrypted>) => void): RealtimeSubscription => {
-      // Subscribe to encrypted events and decrypt them
       return this.backend.projects.subscribe((payload: RealtimeMessage<ProjectEncrypted>) => {
-        const decryptedPayload: RealtimeMessage<ProjectDecrypted> = {
-          ...payload,
-          new: payload.new ? this.decryptProject(payload.new) : undefined,
-          old: payload.old ? this.decryptProject(payload.old) : undefined,
-        };
-        callback(decryptedPayload);
+        void (async () => {
+          callback({
+            ...payload,
+            new: payload.new ? await this.decryptProject(payload.new) : undefined,
+            old: payload.old ? await this.decryptProject(payload.old) : undefined,
+          });
+        })();
       });
     },
   };
@@ -410,7 +385,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.calendars.getAll(options);
       return {
         ...response,
-        data: response.data.map(item => this.decryptCalendar(item)),
+        data: await this.decryptAll(response.data, (item) => this.decryptCalendar(item)),
       };
     },
 
@@ -418,12 +393,12 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.calendars.getById(id);
       return {
         ...response,
-        data: response.data ? this.decryptCalendar(response.data) : null,
+        data: response.data ? await this.decryptCalendar(response.data) : null,
       };
     },
 
     create: async (request: CreateCalendarDecryptedRequest): Promise<ApiResponse<CalendarDecrypted>> => {
-      const { encrypted_data, iv, salt } = this.encryptItemData({
+      const encrypted = await this.encryptItemData({
         name: request.name,
         color: request.color,
         is_visible: request.is_visible ?? true,
@@ -433,50 +408,40 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
 
       const encryptedRequest: CreateCalendarRequest = {
         is_default: request.is_default,
-        encrypted_data,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.calendars.create(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCalendar(response.data) : null,
+        data: response.data ? await this.decryptCalendar(response.data) : null,
       };
     },
 
     update: async (request: UpdateCalendarDecryptedRequest): Promise<ApiResponse<CalendarDecrypted>> => {
-      let encryptedData: string | undefined;
-      let iv: string | undefined;
-      let salt: string | undefined;
+      let encrypted: EncryptedRecordPayload | undefined;
 
-      // Only encrypt if we have content to update
-      if (request.name !== undefined || request.color !== undefined || 
+      if (request.name !== undefined || request.color !== undefined ||
           request.is_visible !== undefined || request.type !== undefined || request.ics_url !== undefined) {
-        const encrypted = this.encryptItemData({
+        encrypted = await this.encryptItemData({
           name: request.name,
           color: request.color,
           is_visible: request.is_visible,
           type: request.type,
           ics_url: request.ics_url,
         });
-        encryptedData = encrypted.encrypted_data;
-        iv = encrypted.iv;
-        salt = encrypted.salt;
       }
 
       const encryptedRequest: UpdateCalendarRequest = {
         id: request.id,
         is_default: request.is_default,
-        encrypted_data: encryptedData,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.calendars.update(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCalendar(response.data) : null,
+        data: response.data ? await this.decryptCalendar(response.data) : null,
       };
     },
 
@@ -485,14 +450,14 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     },
 
     subscribe: (callback: (payload: RealtimeMessage<CalendarDecrypted>) => void): RealtimeSubscription => {
-      // Subscribe to encrypted events and decrypt them
       return this.backend.calendars.subscribe((payload: RealtimeMessage<CalendarEncrypted>) => {
-        const decryptedPayload: RealtimeMessage<CalendarDecrypted> = {
-          ...payload,
-          new: payload.new ? this.decryptCalendar(payload.new) : undefined,
-          old: payload.old ? this.decryptCalendar(payload.old) : undefined,
-        };
-        callback(decryptedPayload);
+        void (async () => {
+          callback({
+            ...payload,
+            new: payload.new ? await this.decryptCalendar(payload.new) : undefined,
+            old: payload.old ? await this.decryptCalendar(payload.old) : undefined,
+          });
+        })();
       });
     },
   };
@@ -503,7 +468,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.calendarEvents.getAll(options);
       return {
         ...response,
-        data: response.data.map(item => this.decryptCalendarEvent(item)),
+        data: await this.decryptAll(response.data, (item) => this.decryptCalendarEvent(item)),
       };
     },
 
@@ -515,7 +480,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.calendarEvents.getByDateRange(startDate, endDate, calendarIds);
       return {
         ...response,
-        data: response.data.map(item => this.decryptCalendarEvent(item)),
+        data: await this.decryptAll(response.data, (item) => this.decryptCalendarEvent(item)),
       };
     },
 
@@ -523,12 +488,12 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.calendarEvents.getById(id);
       return {
         ...response,
-        data: response.data ? this.decryptCalendarEvent(response.data) : null,
+        data: response.data ? await this.decryptCalendarEvent(response.data) : null,
       };
     },
 
     create: async (request: CreateCalendarEventDecryptedRequest): Promise<ApiResponse<CalendarEventDecrypted>> => {
-      const { encrypted_data, iv, salt } = this.encryptItemData({
+      const encrypted = await this.encryptItemData({
         title: request.title,
         description: request.description,
         location: request.location,
@@ -543,23 +508,17 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
         task_id: request.task_id,
       });
 
-      const encryptedRequest: CreateCalendarEventRequest = {
-        encrypted_data,
-        iv,
-        salt,
-      };
+      const encryptedRequest: CreateCalendarEventRequest = { ...encrypted };
 
       const response = await this.backend.calendarEvents.create(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCalendarEvent(response.data) : null,
+        data: response.data ? await this.decryptCalendarEvent(response.data) : null,
       };
     },
 
     update: async (request: UpdateCalendarEventDecryptedRequest): Promise<ApiResponse<CalendarEventDecrypted>> => {
-      let encryptedData: string | undefined;
-      let iv: string | undefined;
-      let salt: string | undefined;
+      let encrypted: EncryptedRecordPayload | undefined;
 
       const hasEncryptedFieldUpdate =
         'title' in request || 'description' in request ||
@@ -575,9 +534,9 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
         if (!currentResponse.data) {
           throw new Error('Calendar event not found');
         }
-        const currentData = this.decryptCalendarEvent(currentResponse.data);
+        const currentData = await this.decryptCalendarEvent(currentResponse.data);
 
-        const encrypted = this.encryptItemData({
+        encrypted = await this.encryptItemData({
           title: 'title' in request ? request.title : currentData.title,
           description: 'description' in request ? request.description : currentData.description,
           location: 'location' in request ? request.location : currentData.location,
@@ -594,22 +553,17 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
           parent_group_event_id: 'parent_group_event_id' in request ? request.parent_group_event_id : currentData.parent_group_event_id,
           task_id: 'task_id' in request ? request.task_id : currentData.task_id,
         });
-        encryptedData = encrypted.encrypted_data;
-        iv = encrypted.iv;
-        salt = encrypted.salt;
       }
 
       const encryptedRequest: UpdateCalendarEventRequest = {
         id: request.id,
-        encrypted_data: encryptedData,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.calendarEvents.update(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCalendarEvent(response.data) : null,
+        data: response.data ? await this.decryptCalendarEvent(response.data) : null,
       };
     },
 
@@ -618,14 +572,14 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     },
 
     subscribe: (callback: (payload: RealtimeMessage<CalendarEventDecrypted>) => void): RealtimeSubscription => {
-      // Subscribe to encrypted events and decrypt them
       return this.backend.calendarEvents.subscribe((payload: RealtimeMessage<CalendarEventEncrypted>) => {
-        const decryptedPayload: RealtimeMessage<CalendarEventDecrypted> = {
-          ...payload,
-          new: payload.new ? this.decryptCalendarEvent(payload.new) : undefined,
-          old: payload.old ? this.decryptCalendarEvent(payload.old) : undefined,
-        };
-        callback(decryptedPayload);
+        void (async () => {
+          callback({
+            ...payload,
+            new: payload.new ? await this.decryptCalendarEvent(payload.new) : undefined,
+            old: payload.old ? await this.decryptCalendarEvent(payload.old) : undefined,
+          });
+        })();
       });
     },
   };
@@ -635,7 +589,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.countdowns.getAll(options);
       return {
         ...response,
-        data: response.data.map((item) => this.decryptCountdown(item)),
+        data: await this.decryptAll(response.data, (item) => this.decryptCountdown(item)),
       };
     },
 
@@ -643,34 +597,30 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       const response = await this.backend.countdowns.getById(id);
       return {
         ...response,
-        data: response.data ? this.decryptCountdown(response.data) : null,
+        data: response.data ? await this.decryptCountdown(response.data) : null,
       };
     },
 
     create: async (request: CreateCountdownDecryptedRequest): Promise<ApiResponse<CountdownDecrypted>> => {
-      const { encrypted_data, iv, salt } = this.encryptItemData({
+      const encrypted = await this.encryptItemData({
         target: request.target,
         task_id: request.task_id,
       });
 
       const encryptedRequest: CreateCountdownRequest = {
         event_id: request.event_id,
-        encrypted_data,
-        iv,
-        salt,
+        ...encrypted,
       };
 
       const response = await this.backend.countdowns.create(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCountdown(response.data) : null,
+        data: response.data ? await this.decryptCountdown(response.data) : null,
       };
     },
 
     update: async (request: UpdateCountdownDecryptedRequest): Promise<ApiResponse<CountdownDecrypted>> => {
-      let encryptedData: string | undefined;
-      let iv: string | undefined;
-      let salt: string | undefined;
+      let encrypted: EncryptedRecordPayload | undefined;
 
       if (request.target !== undefined || 'task_id' in request) {
         const currentResponse = await this.backend.countdowns.getById(request.id);
@@ -678,28 +628,23 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
           throw new Error('Countdown not found');
         }
 
-        const currentData = this.decryptCountdown(currentResponse.data);
-        const encrypted = this.encryptItemData({
+        const currentData = await this.decryptCountdown(currentResponse.data);
+        encrypted = await this.encryptItemData({
           target: request.target ?? currentData.target,
           task_id: 'task_id' in request ? request.task_id : currentData.task_id,
         });
-        encryptedData = encrypted.encrypted_data;
-        iv = encrypted.iv;
-        salt = encrypted.salt;
       }
 
       const encryptedRequest: UpdateCountdownRequest = {
         id: request.id,
         ...(request.event_id !== undefined && { event_id: request.event_id }),
-        ...(encryptedData !== undefined && { encrypted_data: encryptedData }),
-        ...(iv !== undefined && { iv }),
-        ...(salt !== undefined && { salt }),
+        ...encrypted,
       };
 
       const response = await this.backend.countdowns.update(encryptedRequest);
       return {
         ...response,
-        data: response.data ? this.decryptCountdown(response.data) : null,
+        data: response.data ? await this.decryptCountdown(response.data) : null,
       };
     },
 
@@ -709,12 +654,13 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
 
     subscribe: (callback: (payload: RealtimeMessage<CountdownDecrypted>) => void): RealtimeSubscription => {
       return this.backend.countdowns.subscribe((payload: RealtimeMessage<CountdownEncrypted>) => {
-        const decryptedPayload: RealtimeMessage<CountdownDecrypted> = {
-          ...payload,
-          new: payload.new ? this.decryptCountdown(payload.new) : undefined,
-          old: payload.old ? this.decryptCountdown(payload.old) : undefined,
-        };
-        callback(decryptedPayload);
+        void (async () => {
+          callback({
+            ...payload,
+            new: payload.new ? await this.decryptCountdown(payload.new) : undefined,
+            old: payload.old ? await this.decryptCountdown(payload.old) : undefined,
+          });
+        })();
       });
     },
   };
@@ -725,47 +671,31 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       if (!response.data) {
         return response as ApiResponse<UserSettingsDecrypted>;
       }
-      
-      // Check if settings exist (empty iv/salt means no settings yet)
-      if (!response.data.iv || !response.data.salt || response.data.iv === '' || response.data.salt === '') {
-        // Return default settings if none exist
-        return {
-          data: {},
-          error: null,
-          status: 200,
-        };
+
+      // No settings saved yet.
+      if (!response.data.ciphertext_hex) {
+        return { data: {}, error: null, status: 200 };
       }
-      
+
       try {
-        const decrypted = this.decryptSettings(response.data);
-        return {
-          ...response,
-          data: decrypted,
-        };
+        const decrypted = await this.decryptItemData<UserSettingsDecrypted>(response.data);
+        return { ...response, data: decrypted };
       } catch (error) {
         console.error('Failed to decrypt user settings:', error);
-        // Return default settings if decryption fails
-        return {
-          data: {},
-          error: null,
-          status: 200,
-        };
+        return { data: {}, error: null, status: 200 };
       }
     },
 
     update: async (settings: UserSettingsDecrypted): Promise<ApiResponse<UserSettingsDecrypted>> => {
-      const { encrypted_data, iv, salt } = this.encryptSettings(settings);
-      
-      const response = await this.backend.userSettings.update({ encrypted_data, iv, salt });
+      const encrypted = await this.encryptItemData(settings);
+
+      const response = await this.backend.userSettings.update(encrypted);
       if (!response.data) {
         return response as ApiResponse<UserSettingsDecrypted>;
       }
-      
-      const decrypted = this.decryptSettings(response.data);
-      return {
-        ...response,
-        data: decrypted,
-      };
+
+      const decrypted = await this.decryptItemData<UserSettingsDecrypted>(response.data);
+      return { ...response, data: decrypted };
     },
   };
 

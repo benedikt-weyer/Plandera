@@ -1,13 +1,17 @@
 import '@testing-library/jest-dom';
+import { TextEncoder, TextDecoder } from 'node:util';
+import { webcrypto } from 'node:crypto';
 
-// Mock window.crypto for generateSalt and generateIV functions
+// jsdom doesn't provide these; the e2ee-auth package (and Web Crypto-based
+// export/import helpers) need real implementations, not jsdom's absence.
+if (typeof global.TextEncoder === 'undefined') {
+  (global as any).TextEncoder = TextEncoder;
+}
+if (typeof global.TextDecoder === 'undefined') {
+  (global as any).TextDecoder = TextDecoder;
+}
+
 Object.defineProperty(global, 'crypto', {
-  value: {
-    getRandomValues: (arr: Uint8Array) => {
-      for (let i = 0; i < arr.length; i++) {
-        arr[i] = Math.floor(Math.random() * 256);
-      }
-      return arr;
-    }
-  }
+  value: webcrypto,
+  configurable: true,
 });

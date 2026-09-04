@@ -5,9 +5,24 @@
 
 import { BackendInterface } from './backend-interface';
 import {
+  createApiToken,
+  createPasswordSalt,
+  deriveApiTokenCredentials,
+  deriveCredentials,
+  deriveKekKeyPair,
+  getStoredCryptKey,
+  storeCryptKey,
+  clearStoredCryptKey,
+} from '../cryptography/encryption';
+import {
   AuthUser,
   AuthSession,
   AuthResponse,
+  ApiUser,
+  KekMetadata,
+  LinkedPrincipal,
+  PrincipalSummary,
+  WrappedDekPayload,
   SignUpRequest,
   SignInRequest,
   ResetPasswordRequest,
@@ -35,6 +50,16 @@ import {
   QueryOptions
 } from './types';
 
+interface AuthSessionApiShape {
+  currentPrincipal: PrincipalSummary;
+  kekMetadatas: KekMetadata[];
+  linkedPrincipals: LinkedPrincipal[];
+  token: string;
+  refreshToken: string;
+  userId: string;
+  email: string;
+}
+
 interface WebSocketMessage {
   type?: 'subscription' | 'auth_change' | 'error' | 'auth_success' | 'auth_error';
   table?: string;
@@ -60,6 +85,7 @@ class RustBackendImpl implements BackendInterface {
   private runtimeConfigPromise: Promise<void> = Promise.resolve();
   private ws: WebSocket | null = null;
   private authToken: string | null = null;
+  private refreshToken: string | null = null;
   private connectionId: string | null = null;
   private subscriptions: Map<string, (payload: RealtimeMessage<any>) => void> = new Map();
   private authStateCallbacks: Set<(event: string, session: AuthSession | null) => void> = new Set();
@@ -98,6 +124,7 @@ class RustBackendImpl implements BackendInterface {
       if (token) {
         console.log('[RustBackend] Auth token restored from localStorage');
         this.authToken = token;
+        this.refreshToken = localStorage.getItem('refresh_token');
         // Initialize WebSocket connection now that we have a token
         if (!this.ws && typeof window !== 'undefined') {
           console.log('[RustBackend] Initializing WebSocket after token restore');
@@ -132,33 +159,60 @@ class RustBackendImpl implements BackendInterface {
     }
   }
 
-  private storeAuthToken(token: string): void {
+  private storeAuthToken(token: string, refreshToken?: string): void {
     this.authToken = token;
-    
+    if (refreshToken) {
+      this.refreshToken = refreshToken;
+    }
+
     try {
       localStorage.setItem('auth_token', token);
+      if (refreshToken) {
+        localStorage.setItem('refresh_token', refreshToken);
+      }
     } catch (e) {
       // Fallback to cookies if localStorage fails
       document.cookie = `auth_token=${token};path=/;max-age=${60 * 60 * 24 * 30};SameSite=Strict`;
     }
-    
+
     // Initialize WebSocket connection now that we have a token
     if (!this.ws && typeof window !== 'undefined') {
       this.initWebSocket();
     }
   }
 
+  private storeSession(session: AuthSession): void {
+    try {
+      localStorage.setItem('auth_session', JSON.stringify(session));
+    } catch (e) {
+      // Ignore persistence failures — the session still lives in memory.
+    }
+  }
+
+  private readStoredSession(): AuthSession | null {
+    try {
+      const raw = localStorage.getItem('auth_session');
+      return raw ? (JSON.parse(raw) as AuthSession) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   private clearAuthToken(): void {
     this.authToken = null;
+    this.refreshToken = null;
     this.connectionId = null;
-    
+
     try {
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('auth_session');
     } catch (e) {
       // Clear cookie as fallback
       document.cookie = 'auth_token=;path=/;max-age=0';
     }
-    
+    clearStoredCryptKey();
+
     // Close WebSocket connection when token is cleared
     if (this.ws) {
       this.ws.close();
@@ -393,194 +447,145 @@ class RustBackendImpl implements BackendInterface {
     };
   }
 
+
   // Authentication methods
   auth = {
     signUp: async (request: SignUpRequest): Promise<AuthResponse> => {
       try {
-        const response = await this.makeRequest<any>('/api/auth/register', {
+        const saltHex = await createPasswordSalt();
+        const credentials = await deriveCredentials(request.email, request.password, saltHex);
+        const kekKeyPair = await deriveKekKeyPair(credentials.cryptKey);
+
+        const response = await this.makeRequest<{ data: AuthSessionApiShape }>('/api/auth/register', {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify({
+            email: credentials.email,
+            authKey: credentials.authKey,
+            kekPublicKey: kekKeyPair.kekPublicKey,
+            saltHex,
+          }),
         });
-        
-        // Handle the backend's response format
-        if (response.data?.access_token) {
-          this.storeAuthToken(response.data.access_token);
-          return {
-            session: {
-              user: response.data.user,
-              access_token: response.data.access_token,
-              refresh_token: undefined,
-              expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-            },
-            user: response.data.user,
-            error: null
-          };
-        }
-        
-        return { session: null, user: null, error: null };
+
+        const session = this.buildSession(response.data, credentials.cryptKey);
+        this.storeAuthToken(session.access_token, session.refresh_token);
+        storeCryptKey(credentials.cryptKey);
+        this.storeSession(session);
+
+        return { session, user: session.user, error: null };
       } catch (error) {
-        return { 
-          session: null, 
-          user: null, 
-          error: error instanceof Error ? error.message : 'Sign up failed' 
+        return {
+          session: null,
+          user: null,
+          error: error instanceof Error ? error.message : 'Sign up failed',
         };
       }
     },
 
     signIn: async (request: SignInRequest): Promise<AuthResponse> => {
       try {
-        const response = await this.makeRequest<any>('/api/auth/login', {
+        const saltResponse = await this.makeRequest<{ data: { saltHex: string } }>('/api/auth/salt', {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify({ email: request.email }),
         });
-        
-        // Handle the backend's response format
-        if (response.data?.access_token) {
-          this.storeAuthToken(response.data.access_token);
-          
-          const authResult = {
-            session: {
-              user: response.data.user,
-              access_token: response.data.access_token,
-              refresh_token: undefined,
-              expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-            },
-            user: response.data.user,
-            error: null
-          };
-          
-          // Trigger auth state change
-          this.authStateCallbacks.forEach(callback => {
-            callback('SIGNED_IN', authResult.session);
-          });
-          
-          return authResult;
-        }
-        
-        return { session: null, user: null, error: 'Invalid credentials' };
+
+        const credentials = await deriveCredentials(request.email, request.password, saltResponse.data.saltHex);
+
+        const response = await this.makeRequest<{ data: AuthSessionApiShape }>('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: credentials.email,
+            authKey: credentials.authKey,
+          }),
+        });
+
+        const session = this.buildSession(response.data, credentials.cryptKey);
+        this.storeAuthToken(session.access_token, session.refresh_token);
+        storeCryptKey(credentials.cryptKey);
+        this.storeSession(session);
+
+        this.authStateCallbacks.forEach((callback) => callback('SIGNED_IN', session));
+
+        return { session, user: session.user, error: null };
       } catch (error) {
-        return { 
-          session: null, 
-          user: null, 
-          error: error instanceof Error ? error.message : 'Sign in failed' 
+        return {
+          session: null,
+          user: null,
+          error: error instanceof Error ? error.message : 'Sign in failed',
         };
       }
     },
 
     signOut: async (): Promise<{ error: string | null }> => {
-      try {
-        await this.makeRequest('/api/auth/logout', {
-          method: 'POST',
-        });
-        this.clearAuthToken();
-        
-        // Trigger auth state change
-        this.authStateCallbacks.forEach(callback => {
-          callback('SIGNED_OUT', null);
-        });
-        
-        return { error: null };
-      } catch (error) {
-        this.clearAuthToken(); // Clear token even if request fails
-        
-        // Trigger auth state change even if logout request fails
-        this.authStateCallbacks.forEach(callback => {
-          callback('SIGNED_OUT', null);
-        });
-        
-        return { error: error instanceof Error ? error.message : 'Sign out failed' };
-      }
+      this.clearAuthToken();
+      this.authStateCallbacks.forEach((callback) => callback('SIGNED_OUT', null));
+      return { error: null };
     },
 
     getSession: async (): Promise<{ data: { session: AuthSession | null }, error: string | null }> => {
-      try {
-        // Since /api/auth/session doesn't exist, we'll construct a session from the current user
-        if (this.authToken) {
-          const { data: { user }, error } = await this.auth.getUser();
-          if (user && !error) {
-            const session: AuthSession = {
-              user: user,
-              access_token: this.authToken,
-              refresh_token: undefined,
-              expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-            };
-            return { data: { session }, error: null };
-          }
-        }
+      if (!this.authToken) {
         return { data: { session: null }, error: null };
-      } catch (error) {
-        return { 
-          data: { session: null }, 
-          error: error instanceof Error ? error.message : 'Failed to get session' 
-        };
       }
+      const session = this.readStoredSession();
+      return { data: { session }, error: null };
     },
 
     getUser: async (): Promise<{ data: { user: AuthUser | null }, error: string | null }> => {
-      try {
-        const response = await this.makeRequest<{ data: AuthUser | null }>('/api/auth/me');
-        
-        // The backend returns user data directly in response.data, not response.data.user
-        const user = response.data;
-        
-        // If we have a valid user and token, trigger SIGNED_IN event for consistency
-        if (user && this.authToken) {
-          const session: AuthSession = {
-            user: user,
-            access_token: this.authToken,
-            refresh_token: undefined,
-            expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-          };
-          
-          this.authStateCallbacks.forEach(callback => {
-            callback('SIGNED_IN', session);
-          });
-        }
-        
-        return { data: { user }, error: null };
-      } catch (error) {
-        // If token is invalid, clear it
-        if (error instanceof Error && (error.message.includes('401') || error.message.includes('Unauthorized'))) {
-          this.clearAuthToken();
-          // Trigger SIGNED_OUT event
-          this.authStateCallbacks.forEach(callback => {
-            callback('SIGNED_OUT', null);
-          });
-        }
-        return { 
-          data: { user: null }, 
-          error: error instanceof Error ? error.message : 'Failed to get user' 
-        };
-      }
+      const { data } = await this.auth.getSession();
+      return { data: { user: data.session?.user ?? null }, error: null };
     },
 
     updatePassword: async (request: UpdatePasswordRequest): Promise<{ error: string | null }> => {
       try {
-        await this.makeRequest('/api/auth/update-password', {
-          method: 'PUT',
-          body: JSON.stringify(request),
+        const session = this.readStoredSession();
+        if (!session) {
+          return { error: 'Not signed in' };
+        }
+        const cryptKey = getStoredCryptKey();
+        if (!cryptKey) {
+          return { error: 'Missing local encryption key' };
+        }
+
+        const saltHex = session.kekMetadatas.length > 0 ? undefined : await createPasswordSalt();
+        const saltResponse = saltHex
+          ? { saltHex }
+          : (
+              await this.makeRequest<{ data: { saltHex: string } }>('/api/auth/salt', {
+                method: 'POST',
+                body: JSON.stringify({ email: session.user.email }),
+              })
+            ).data;
+
+        const newCredentials = await deriveCredentials(session.user.email, request.password, saltResponse.saltHex);
+        const newKekKeyPair = await deriveKekKeyPair(newCredentials.cryptKey);
+
+        const response = await this.makeRequest<{ data: AuthSessionApiShape }>('/api/auth/rotate-password', {
+          method: 'POST',
+          body: JSON.stringify({
+            kekPublicKey: newKekKeyPair.kekPublicKey,
+            newAuthKey: newCredentials.authKey,
+          }),
         });
+
+        const newSession = this.buildSession(response.data, newCredentials.cryptKey);
+        this.storeAuthToken(newSession.access_token, newSession.refresh_token);
+        storeCryptKey(newCredentials.cryptKey);
+        this.storeSession(newSession);
+
         return { error: null };
       } catch (error) {
         return { error: error instanceof Error ? error.message : 'Failed to update password' };
       }
     },
 
-    resetPasswordForEmail: async (request: ResetPasswordRequest): Promise<{ error: string | null }> => {
-      try {
-        await this.makeRequest('/api/auth/reset-password', {
-          method: 'POST',
-          body: JSON.stringify(request),
-        });
-        return { error: null };
-      } catch (error) {
-        return { error: error instanceof Error ? error.message : 'Failed to reset password' };
-      }
+    resetPasswordForEmail: async (_request: ResetPasswordRequest): Promise<{ error: string | null }> => {
+      // Zero-knowledge accounts have no server-recoverable password: losing
+      // the master password means losing access. Nothing to send here.
+      return { error: 'Password reset is not available — the master password cannot be recovered.' };
     },
 
     onAuthStateChange: (callback: (event: string, session: AuthSession | null) => void) => {
       this.authStateCallbacks.add(callback);
-      
+
       return {
         data: {
           subscription: {
@@ -591,6 +596,60 @@ class RustBackendImpl implements BackendInterface {
         }
       };
     }
+  };
+
+  private buildSession(data: AuthSessionApiShape, cryptKey: Uint8Array): AuthSession {
+    return {
+      user: { id: data.userId, email: data.email, created_at: new Date().toISOString() },
+      access_token: data.token,
+      refresh_token: data.refreshToken,
+      expires_at: Date.now() + 15 * 60 * 1000,
+      currentPrincipal: data.currentPrincipal,
+      kekMetadatas: data.kekMetadatas,
+      linkedPrincipals: data.linkedPrincipals,
+    };
+  }
+
+  // API user (scoped access principal) methods
+  apiUsers = {
+    list: async (): Promise<ApiResponse<ApiUser[]>> => {
+      return this.makeRequest<ApiResponse<ApiUser[]>>('/api/auth/api-users');
+    },
+
+    create: async (request: {
+      apiUserId: string;
+      authKey: string;
+      kekPublicKey: string;
+      encryptedLabel: { algorithm: string; ciphertext_hex: string; nonce_hex: string; version: number };
+      encryptedLabelDeks: WrappedDekPayload[];
+    }): Promise<ApiResponse<ApiUser>> => {
+      return this.makeRequest<ApiResponse<ApiUser>>('/api/auth/api-users', {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+    },
+
+    delete: async (id: string): Promise<{ error: string | null }> => {
+      try {
+        await this.makeRequest(`/api/auth/api-users/${id}`, { method: 'DELETE' });
+        return { error: null };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : 'Failed to delete api user' };
+      }
+    },
+
+    provisionDeks: async (
+      apiUserId: string,
+      deks: { resource_id: string; wrapped_dek: WrappedDekPayload }[],
+    ): Promise<ApiResponse<ApiUser>> => {
+      return this.makeRequest<ApiResponse<ApiUser>>(`/api/auth/api-users/${apiUserId}/deks`, {
+        method: 'POST',
+        body: JSON.stringify({ deks }),
+      });
+    },
+
+    createApiToken,
+    deriveApiTokenCredentials,
   };
 
   // Can-do list methods
@@ -860,156 +919,6 @@ class RustBackendImpl implements BackendInterface {
         body: JSON.stringify(request),
       });
     },
-  };
-
-  // Data management methods
-  dataManagement = {
-    exportUserData: async (): Promise<any> => {
-      // Get user info
-      const { data: { user } } = await this.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Fetch all user data
-      const [canDoListResult, projectsResult, calendarsResult, calendarEventsResult, countdownsResult, userSettingsResult] = await Promise.all([
-        this.canDoList.getAll(),
-        this.projects.getAll({ all: true }), // Get all projects including children
-        this.calendars.getAll(),
-        this.calendarEvents.getAll(),
-        this.countdowns.getAll(),
-        this.userSettings.get(),
-      ]);
-
-      return {
-        version: '1.0',
-        timestamp: new Date().toISOString(),
-        userId: user.id,
-        data: {
-          can_do_list: canDoListResult.data || [],
-          projects: projectsResult.data || [],
-          calendars: calendarsResult.data || [],
-          calendar_events: calendarEventsResult.data || [],
-          countdowns: countdownsResult.data || [],
-          user_settings: userSettingsResult.data || undefined,
-        },
-      };
-    },
-
-    importUserData: async (data: any): Promise<void> => {
-      // Import in the correct order (projects first, then tasks that reference them)
-      
-      // Import projects
-      if (data.data?.projects) {
-        for (const project of data.data.projects) {
-          await this.projects.create({
-            encrypted_data: project.encrypted_data,
-            iv: project.iv,
-            salt: project.salt,
-            parent_id: project.parent_id,
-            display_order: project.display_order || project.order || 0,
-            is_collapsed: project.is_collapsed || project.collapsed || false,
-          });
-        }
-      }
-
-      // Import can-do list items
-      if (data.data?.can_do_list) {
-        for (const task of data.data.can_do_list) {
-          await this.canDoList.create({
-            encrypted_data: task.encrypted_data,
-            iv: task.iv,
-            salt: task.salt,
-            project_id: task.project_id,
-            display_order: task.display_order || task.order || 0,
-          });
-        }
-      }
-
-      // Import calendars
-      if (data.data?.calendars) {
-        for (const calendar of data.data.calendars) {
-          await this.calendars.create({
-            encrypted_data: calendar.encrypted_data,
-            iv: calendar.iv,
-            salt: calendar.salt,
-            is_default: calendar.is_default || false,
-          });
-        }
-      }
-
-      // Import calendar events
-      if (data.data?.calendar_events) {
-        for (const event of data.data.calendar_events) {
-          await this.calendarEvents.create({
-            encrypted_data: event.encrypted_data,
-            iv: event.iv,
-            salt: event.salt,
-          });
-        }
-      }
-
-      // Import countdowns
-      if (data.data?.countdowns) {
-        for (const countdown of data.data.countdowns) {
-          await this.countdowns.create({
-            event_id: countdown.event_id,
-            encrypted_data: countdown.encrypted_data,
-            iv: countdown.iv,
-            salt: countdown.salt,
-          });
-        }
-      }
-
-      // Import user settings
-      if (data.data?.user_settings?.encrypted_data) {
-        await this.userSettings.update({
-          encrypted_data: data.data.user_settings.encrypted_data,
-          iv: data.data.user_settings.iv,
-          salt: data.data.user_settings.salt,
-        });
-      }
-    },
-
-    clearAllUserData: async (): Promise<void> => {
-      // Get all data first
-      const [canDoListResult, projectsResult, calendarsResult, calendarEventsResult] = await Promise.all([
-        this.canDoList.getAll(),
-        this.projects.getAll({ all: true }), // Get all projects including children
-        this.calendars.getAll(),
-        this.calendarEvents.getAll(),
-      ]);
-
-      // Delete in reverse order (children first, then parents)
-      
-      // Delete calendar events
-      if (calendarEventsResult.data) {
-        for (const event of calendarEventsResult.data) {
-          await this.calendarEvents.delete(event.id);
-        }
-      }
-
-      // Delete calendars
-      if (calendarsResult.data) {
-        for (const calendar of calendarsResult.data) {
-          await this.calendars.delete(calendar.id);
-        }
-      }
-
-      // Delete can-do list items
-      if (canDoListResult.data) {
-        for (const task of canDoListResult.data) {
-          await this.canDoList.delete(task.id);
-        }
-      }
-
-      // Delete projects
-      if (projectsResult.data) {
-        for (const project of projectsResult.data) {
-          await this.projects.delete(project.id);
-        }
-      }
-    }
   };
 }
 

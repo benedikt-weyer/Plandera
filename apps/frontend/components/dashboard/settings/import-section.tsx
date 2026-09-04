@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useError } from '@/utils/context/ErrorContext';
 import { useTranslation } from '@/utils/context/LanguageContext';
 import { importUserData, importDecryptedUserData, type ExportedData, type DecryptedExportData } from '@/app/settings/api';
-import { decryptData, deriveKeyFromPassword } from '@/utils/cryptography/encryption';
+import { decryptBlobWithPassword, type PasswordProtectedBlob } from '@/utils/cryptography/encryption';
 import { Upload, Eye, AlertTriangle, CheckCircle, Lock, Unlock, FileText } from 'lucide-react';
 // Remove unused import
 
@@ -25,7 +25,7 @@ interface ImportPreview {
   isDecrypted: boolean;
 }
 
-export function ImportSection({ encryptionKey }: ImportSectionProps) {
+export function ImportSection({}: ImportSectionProps) {
   const [isImporting, setIsImporting] = useState(false);
   const [isDryRun, setIsDryRun] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -49,7 +49,7 @@ export function ImportSection({ encryptionKey }: ImportSectionProps) {
         // Try to detect the format
         try {
           const parsed = JSON.parse(content);
-          const isPasswordProtected = parsed.encrypted_data && parsed.salt && parsed.iv;
+          const isPasswordProtected = parsed.ciphertext_hex && parsed.salt_hex && parsed.iv_hex;
           let isDecrypted = false;
           
           if (isPasswordProtected) {
@@ -73,23 +73,22 @@ export function ImportSection({ encryptionKey }: ImportSectionProps) {
     }
   };
 
-  const decryptImportData = (rawData: string, password?: string): ExportedData | DecryptedExportData | null => {
+  const decryptImportData = async (rawData: string, password?: string): Promise<ExportedData | DecryptedExportData | null> => {
     try {
       const parsed = JSON.parse(rawData);
-      
+
       // Check if it's password protected
-      if (parsed.encrypted_data && parsed.salt && parsed.iv) {
+      if (parsed.ciphertext_hex && parsed.salt_hex && parsed.iv_hex) {
         if (!password) {
           throw new Error('Password required for encrypted data');
         }
-        
-        const derivedKey = deriveKeyFromPassword(password, parsed.salt);
-        const decrypted = decryptData(parsed.encrypted_data, derivedKey, parsed.iv);
-        
+
+        const decrypted = await decryptBlobWithPassword<ExportedData | DecryptedExportData>(parsed as PasswordProtectedBlob, password);
+
         if (!decrypted) {
           throw new Error('Failed to decrypt data - check password');
         }
-        
+
         // Check if this was originally a decrypted format that was password protected
         if (parsed.original_format === 'decrypted') {
           return decrypted as DecryptedExportData;
@@ -292,7 +291,7 @@ export function ImportSection({ encryptionKey }: ImportSectionProps) {
 
       if (isPasswordProtected) {
         // Handle password-protected data (could be originally encrypted or decrypted)
-        parsedData = decryptImportData(importData, password);
+        parsedData = await decryptImportData(importData, password);
         if (parsedData) {
           // Check if the decrypted data is in decrypted format
           const dataObj = parsedData.data as any;
@@ -316,7 +315,7 @@ export function ImportSection({ encryptionKey }: ImportSectionProps) {
         isDecrypted = true;
       } else {
         // Handle plain encrypted data
-        parsedData = decryptImportData(importData);
+        parsedData = await decryptImportData(importData);
         isDecrypted = false;
       }
 
@@ -346,9 +345,9 @@ export function ImportSection({ encryptionKey }: ImportSectionProps) {
       console.log('Starting import process...');
       
       if (preview.isDecrypted) {
-        await importDecryptedUserData(preview.data as DecryptedExportData, encryptionKey);
+        await importDecryptedUserData(preview.data as DecryptedExportData);
       } else {
-        await importUserData(preview.data as ExportedData, encryptionKey);
+        await importUserData(preview.data as ExportedData);
       }
       
       setError(''); // Clear any previous errors
@@ -475,7 +474,7 @@ export function ImportSection({ encryptionKey }: ImportSectionProps) {
               // Re-detect format when data changes
               try {
                 const parsed = JSON.parse(e.target.value);
-                const isPasswordProtected = parsed.encrypted_data && parsed.salt && parsed.iv;
+                const isPasswordProtected = parsed.ciphertext_hex && parsed.salt_hex && parsed.iv_hex;
                 let isDecrypted = false;
                 
                 if (isPasswordProtected) {

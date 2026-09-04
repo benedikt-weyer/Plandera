@@ -1,16 +1,21 @@
 use sea_orm::{Set, entity::prelude::*};
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "calendar_events")]
+/// A secondary login principal owned by a user, for scoped API access. It has
+/// its own auth key and its own KEK (see `kek_metadata`), and can be granted
+/// access to specific resources by wrapping those resources' DEKs for it.
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
+#[sea_orm(table_name = "api_users")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
-    pub algorithm: String,
-    pub ciphertext_hex: String,
-    pub nonce_hex: String,
-    pub version: i32,
+    #[sea_orm(unique)]
+    pub username: String,
+    pub auth_key_hash: String,
+    pub label_algorithm: String,
+    pub label_ciphertext_hex: String,
+    pub label_nonce_hex: String,
+    pub label_version: i32,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }
@@ -25,19 +30,11 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     User,
-    #[sea_orm(has_many = "super::countdowns::Entity")]
-    Countdowns,
 }
 
 impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::User.def()
-    }
-}
-
-impl Related<super::countdowns::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Countdowns.def()
     }
 }
 

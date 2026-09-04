@@ -2,6 +2,42 @@
  * Type definitions for backend API interactions
  */
 
+// A record's DEK, wrapped for one principal's ML-KEM-768 KEK. Field names
+// match the Rust `WrappedDekPayload` struct's wire format exactly — it is
+// never camelCase-renamed, even when nested inside a camelCase auth request.
+export interface WrappedDekPayload {
+  user_id: string;
+  kek_public_key: string;
+  algorithm: string;
+  kem_ciphertext_hex: string;
+  wrapped_dek_hex: string;
+  nonce_hex: string;
+  version: number;
+}
+
+export interface KekMetadata {
+  kekEpochVersion: number;
+  kekPublicKey: string;
+}
+
+export type PrincipalKind = 'user' | 'api_user';
+
+export interface PrincipalSummary {
+  id: string;
+  kind: PrincipalKind;
+  email?: string;
+  username?: string;
+}
+
+export interface LinkedPrincipal {
+  id: string;
+  kind: PrincipalKind;
+  email?: string;
+  username?: string;
+  latestKekEpochVersion: number;
+  latestKekPublicKey: string;
+}
+
 // Authentication types
 export interface AuthUser {
   id: string;
@@ -13,8 +49,11 @@ export interface AuthUser {
 export interface AuthSession {
   user: AuthUser;
   access_token: string;
-  refresh_token?: string;
+  refresh_token: string;
   expires_at: number;
+  currentPrincipal: PrincipalSummary;
+  kekMetadatas: KekMetadata[];
+  linkedPrincipals: LinkedPrincipal[];
 }
 
 export interface AuthResponse {
@@ -43,6 +82,17 @@ export interface UpdatePasswordRequest {
   password: string;
 }
 
+export interface ApiUser {
+  id: string;
+  username: string;
+  createdAt: string;
+  updatedAt: string;
+  latestKekEpochVersion: number;
+  latestKekPublicKey: string;
+  encryptedLabel: { algorithm: string; ciphertext_hex: string; nonce_hex: string; version: number };
+  encryptedLabelDek: WrappedDekPayload;
+}
+
 // Can-do list types
 export interface CanDoItemEncrypted {
   id: string;
@@ -51,9 +101,11 @@ export interface CanDoItemEncrypted {
   display_order: number;
   created_at: string;
   updated_at: string;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_dek?: WrappedDekPayload;
 }
 
 export interface CanDoItemDecrypted {
@@ -79,18 +131,22 @@ export interface CanDoItemDecrypted {
 
 export interface CreateCanDoItemRequest {
   project_id?: string;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_deks: WrappedDekPayload[];
   display_order?: number;
 }
 
 export interface UpdateCanDoItemRequest {
   id: string;
   project_id?: string;
-  encrypted_data?: string;
-  iv?: string;
-  salt?: string;
+  algorithm?: string;
+  ciphertext_hex?: string;
+  nonce_hex?: string;
+  version?: number;
+  wrapped_deks?: WrappedDekPayload[];
   display_order?: number;
 }
 
@@ -134,9 +190,11 @@ export interface ProjectEncrypted {
   parent_id?: string;
   display_order: number;
   is_collapsed: boolean;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_dek?: WrappedDekPayload;
 }
 
 export interface ProjectDecrypted {
@@ -158,9 +216,11 @@ export interface CreateProjectRequest {
   display_order: number;
   is_collapsed?: boolean;
   parent_id?: string;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_deks: WrappedDekPayload[];
 }
 
 export interface UpdateProjectRequest {
@@ -168,9 +228,11 @@ export interface UpdateProjectRequest {
   parent_id?: string;
   display_order?: number;
   is_collapsed?: boolean;
-  encrypted_data?: string;
-  iv?: string;
-  salt?: string;
+  algorithm?: string;
+  ciphertext_hex?: string;
+  nonce_hex?: string;
+  version?: number;
+  wrapped_deks?: WrappedDekPayload[];
 }
 
 export interface CreateProjectDecryptedRequest {
@@ -199,9 +261,11 @@ export interface CalendarEncrypted {
   created_at: string;
   updated_at: string;
   user_id: string;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_dek?: WrappedDekPayload;
 }
 
 export interface CalendarDecrypted {
@@ -221,17 +285,21 @@ export interface CalendarDecrypted {
 
 
 export interface CreateCalendarRequest {
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_deks: WrappedDekPayload[];
   is_default?: boolean;
 }
 
 export interface UpdateCalendarRequest {
   id: string;
-  encrypted_data?: string;
-  iv?: string;
-  salt?: string;
+  algorithm?: string;
+  ciphertext_hex?: string;
+  nonce_hex?: string;
+  version?: number;
+  wrapped_deks?: WrappedDekPayload[];
   is_default?: boolean;
 }
 
@@ -261,9 +329,11 @@ export interface CalendarEventEncrypted {
   created_at: string;
   updated_at: string;
   user_id: string;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_dek?: WrappedDekPayload;
 }
 
 export interface CalendarEventDecrypted {
@@ -289,16 +359,20 @@ export interface CalendarEventDecrypted {
 
 
 export interface CreateCalendarEventRequest {
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_deks: WrappedDekPayload[];
 }
 
 export interface UpdateCalendarEventRequest {
   id: string;
-  encrypted_data?: string;
-  iv?: string;
-  salt?: string;
+  algorithm?: string;
+  ciphertext_hex?: string;
+  nonce_hex?: string;
+  version?: number;
+  wrapped_deks?: WrappedDekPayload[];
 }
 
 export interface CreateCalendarEventDecryptedRequest {
@@ -339,9 +413,11 @@ export interface CountdownEncrypted {
   event_id: string;
   created_at: string;
   updated_at: string;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_dek?: WrappedDekPayload;
 }
 
 export interface CountdownDecrypted {
@@ -356,17 +432,21 @@ export interface CountdownDecrypted {
 
 export interface CreateCountdownRequest {
   event_id: string;
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_deks: WrappedDekPayload[];
 }
 
 export interface UpdateCountdownRequest {
   id: string;
   event_id?: string;
-  encrypted_data?: string;
-  iv?: string;
-  salt?: string;
+  algorithm?: string;
+  ciphertext_hex?: string;
+  nonce_hex?: string;
+  version?: number;
+  wrapped_deks?: WrappedDekPayload[];
 }
 
 export interface CreateCountdownDecryptedRequest {
@@ -414,16 +494,12 @@ export interface PaginatedResponse<T = any> {
 }
 
 // User Settings types
-export interface UserSettingsEncryptedData {
-  encrypted_data: string;
-  iv: string;
-  salt: string;
-}
-
 export interface UserSettingsEncrypted {
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_dek?: WrappedDekPayload;
 }
 
 export type TaskClickBehavior = 'edit' | 'complete';
@@ -437,9 +513,11 @@ export interface UserSettingsDecrypted {
 }
 
 export interface UpdateUserSettingsRequest {
-  encrypted_data: string;
-  iv: string;
-  salt: string;
+  algorithm: string;
+  ciphertext_hex: string;
+  nonce_hex: string;
+  version: number;
+  wrapped_deks: WrappedDekPayload[];
 }
 
 // Query filter types

@@ -4,13 +4,16 @@ use sea_orm_migration::prelude::*;
 pub struct Migration;
 
 #[derive(DeriveIden)]
-enum CalendarEvents {
+enum ApiUsers {
     Table,
     Id,
     UserId,
-    EncryptedData,
-    Iv,
-    Salt,
+    Username,
+    AuthKeyHash,
+    LabelAlgorithm,
+    LabelCiphertextHex,
+    LabelNonceHex,
+    LabelVersion,
     CreatedAt,
     UpdatedAt,
 }
@@ -27,39 +30,41 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(CalendarEvents::Table)
+                    .table(ApiUsers::Table)
                     .if_not_exists()
+                    .col(ColumnDef::new(ApiUsers::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(ApiUsers::UserId).uuid().not_null())
                     .col(
-                        ColumnDef::new(CalendarEvents::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key()
-                            .extra("DEFAULT gen_random_uuid()".to_string()),
-                    )
-                    .col(ColumnDef::new(CalendarEvents::UserId).uuid().not_null())
-                    .col(
-                        ColumnDef::new(CalendarEvents::EncryptedData)
+                        ColumnDef::new(ApiUsers::Username)
                             .string()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(ColumnDef::new(ApiUsers::AuthKeyHash).string().not_null())
+                    .col(ColumnDef::new(ApiUsers::LabelAlgorithm).string().not_null())
+                    .col(
+                        ColumnDef::new(ApiUsers::LabelCiphertextHex)
+                            .text()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(CalendarEvents::Iv).string().not_null())
-                    .col(ColumnDef::new(CalendarEvents::Salt).string().not_null())
+                    .col(ColumnDef::new(ApiUsers::LabelNonceHex).string().not_null())
+                    .col(ColumnDef::new(ApiUsers::LabelVersion).integer().not_null())
                     .col(
-                        ColumnDef::new(CalendarEvents::CreatedAt)
+                        ColumnDef::new(ApiUsers::CreatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .extra("DEFAULT NOW()".to_string()),
                     )
                     .col(
-                        ColumnDef::new(CalendarEvents::UpdatedAt)
+                        ColumnDef::new(ApiUsers::UpdatedAt)
                             .timestamp_with_time_zone()
                             .not_null()
                             .extra("DEFAULT NOW()".to_string()),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name("fk-calendar_events-user_id")
-                            .from(CalendarEvents::Table, CalendarEvents::UserId)
+                            .name("fk-api_users-user_id")
+                            .from(ApiUsers::Table, ApiUsers::UserId)
                             .to((Alias::new("auth"), Users::Table), Users::Id)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -68,28 +73,20 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Create indexes
         manager
             .create_index(
                 Index::create()
-                    .name("idx-calendar_events-user_id")
-                    .table(CalendarEvents::Table)
-                    .col(CalendarEvents::UserId)
+                    .name("idx-api_users-user_id")
+                    .table(ApiUsers::Table)
+                    .col(ApiUsers::UserId)
                     .to_owned(),
             )
-            .await?;
-
-        Ok(())
+            .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(
-                Table::drop()
-                    .table(CalendarEvents::Table)
-                    .if_exists()
-                    .to_owned(),
-            )
+            .drop_table(Table::drop().table(ApiUsers::Table).if_exists().to_owned())
             .await
     }
 }
