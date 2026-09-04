@@ -53,7 +53,7 @@ This document provides a complete overview of the Kubernetes deployment setup fo
 ### Docker Configuration
 
 - **backend/.dockerignore** - Optimizes backend Docker builds
-- **frontend/.dockerignore** - Optimizes frontend Docker builds
+- **.dockerignore** - Optimizes frontend Docker builds
 
 ## Quick Start Guide
 
@@ -145,7 +145,7 @@ streamline-scheduler/
 ├── backend/                      # Rust backend
 │   ├── Dockerfile
 │   └── .dockerignore
-├── frontend/                     # Next.js frontend
+├── apps/frontend/                # Next.js frontend
 │   ├── Dockerfile
 │   └── .dockerignore
 ├── deploy.sh                     # Deployment helper

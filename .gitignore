@@ -10,3 +10,7 @@ docker-compose.override.yml
 docker-compose.override.yaml
 
 backend/target/
+
+# turborepo / pnpm workspace
+node_modules/
+.turbo/

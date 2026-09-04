@@ -61,19 +61,19 @@ else
 fi
 
 # Create frontend .env.local if it doesn't exist
-if [ ! -f "frontend/.env.local" ]; then
-    echo -e "${BLUE}📝 Creating frontend/.env.local...${NC}"
+if [ ! -f "apps/frontend/.env.local" ]; then
+    echo -e "${BLUE}📝 Creating apps/frontend/.env.local...${NC}"
     
-    cat > frontend/.env.local << 'EOF'
+    cat > apps/frontend/.env.local << 'EOF'
 # Frontend Development Environment Variables
 
 NEXT_PUBLIC_BACKEND_HTTP_URL=http://localhost:3001
 NEXT_PUBLIC_BACKEND_WS_URL=ws://localhost:3001
 EOF
     
-    echo -e "${GREEN}✓ frontend/.env.local created${NC}"
+    echo -e "${GREEN}✓ apps/frontend/.env.local created${NC}"
 else
-    echo -e "${YELLOW}⚠️  frontend/.env.local already exists, skipping...${NC}"
+    echo -e "${YELLOW}⚠️  apps/frontend/.env.local already exists, skipping...${NC}"
 fi
 
 echo ""

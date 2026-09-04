@@ -73,7 +73,7 @@ See [docs/deployment/K8S_QUICKSTART.md](./docs/deployment/K8S_QUICKSTART.md) for
    cp backend/env.example backend/.env
    
    # Create environment file for the frontend
-   cp frontend/env.example frontend/.env.local
+   cp apps/frontend/env.example apps/frontend/.env.local
    
    # Edit the environment files with your settings
    # Set strong passwords, JWT secrets, and database configuration
@@ -165,7 +165,7 @@ JWT_SECRET=your-super-secret-jwt-token-with-at-least-32-characters-long
    
    # Set up production environment
    cp backend/env.example backend/.env.production
-   cp frontend_new/env.example frontend_new/.env.production
+   cp apps/frontend/env.example apps/frontend/.env.production
    # Edit .env.production files with production settings
    
    # Start services
@@ -298,7 +298,7 @@ The project includes a comprehensive `shell.nix` file that sets up a complete de
 3. **Setup Frontend**:
 
    ```bash
-   cd frontend
+   cd apps/frontend
    
    # Install dependencies
    pnpm install
@@ -319,7 +319,7 @@ The project includes a comprehensive `shell.nix` file that sets up a complete de
 
 ```text
 streamline-scheduler/
-├── frontend/                # Next.js frontend application
+├── apps/frontend/           # Next.js frontend application
 │   ├── app/                # Next.js 14+ app router
 │   │   ├── (auth-pages)/   # Authentication pages
 │   │   ├── dashboard/      # Dashboard pages

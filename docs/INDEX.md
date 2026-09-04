@@ -41,10 +41,10 @@ Testing guides and procedures for quality assurance.
 See [backend/README.md](../backend/README.md) and [backend/API.md](../backend/API.md) for backend-specific documentation.
 
 ### Frontend
-See [frontend/README.md](../frontend/README.md) for frontend-specific documentation.
+See [apps/frontend/README.md](../apps/frontend/README.md) for frontend-specific documentation.
 
 ### Internationalization
-See [frontend/utils/i18n/README.md](../frontend/utils/i18n/README.md) for translation and localization guides.
+See [apps/frontend/utils/i18n/README.md](../apps/frontend/utils/i18n/README.md) for translation and localization guides.
 
 ---
 

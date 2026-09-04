@@ -10,12 +10,7 @@ yarn-error.log*
 out
 dist
 build
-
-# Testing
-coverage
-.nyc_output
-test
-__tests__
+target
 
 # Environment files
 .env
@@ -28,17 +23,11 @@ __tests__
 .gitattributes
 
 # Docker files
-Dockerfile
 docker-compose.yml
-.dockerignore
 
 # Documentation
 *.md
 LICENSE
-README.md
-
-# CI/CD
-.github
 
 # Development files
 .vscode
@@ -46,6 +35,7 @@ README.md
 *.swp
 *.swo
 *~
+.direnv
 
 # OS files
 .DS_Store
@@ -57,4 +47,3 @@ logs
 
 # TypeScript
 *.tsbuildinfo
-

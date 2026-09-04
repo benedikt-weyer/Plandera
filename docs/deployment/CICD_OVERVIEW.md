@@ -64,7 +64,7 @@ This document provides an overview of the CI/CD pipeline for Plandera (formerly 
    - Push to GitHub Container Registry
 
 2. **Build Frontend**
-   - Build Docker image from `frontend/Dockerfile`
+   - Build Docker image from `apps/frontend/Dockerfile`
    - Tag: `ghcr.io/<username>/plandera-frontend:staging-latest`
    - Tag: `ghcr.io/<username>/plandera-frontend:staging-<sha>`
    - Push to GitHub Container Registry
@@ -98,7 +98,7 @@ This document provides an overview of the CI/CD pipeline for Plandera (formerly 
    - Push to GitHub Container Registry
 
 3. **Build Frontend**
-   - Build Docker image from `frontend/Dockerfile`
+   - Build Docker image from `apps/frontend/Dockerfile`
    - Tag: `ghcr.io/<username>/plandera-frontend:latest`
    - Tag: `ghcr.io/<username>/plandera-frontend:<sha>`
    - Tag: `ghcr.io/<username>/plandera-frontend:<tag>` (if tagged)
@@ -272,7 +272,7 @@ If production issues occur:
 ```bash
 # Test build locally
 docker build -t test-build ./backend
-docker build -t test-build ./frontend
+docker build -f apps/frontend/Dockerfile -t test-build .
 ```
 
 ### Pipeline Fails at Push Stage

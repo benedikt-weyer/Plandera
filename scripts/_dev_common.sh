@@ -153,7 +153,7 @@ ensure_backend_env() {
 }
 
 ensure_frontend_env() {
-  local frontend_dir="$PROJECT_DIR/frontend"
+  local frontend_dir="$PROJECT_DIR/apps/frontend"
   local frontend_env="$frontend_dir/.env.local"
 
   cd "$frontend_dir"
@@ -225,7 +225,7 @@ start_frontend() {
   load_root_env
 
   echo "Starting Next.js development server..."
-  cd "$PROJECT_DIR/frontend"
+  cd "$PROJECT_DIR/apps/frontend"
   nohup pnpm dev >"$FRONTEND_LOG_FILE" 2>&1 &
   echo $! >"$FRONTEND_PID_FILE"
   echo "Frontend server started in background"
@@ -296,7 +296,7 @@ build_backend() {
 }
 
 build_frontend() {
-  cd "$PROJECT_DIR/frontend"
+  cd "$PROJECT_DIR/apps/frontend"
   pnpm build
 }
 
@@ -306,7 +306,7 @@ test_backend() {
 }
 
 test_frontend() {
-  cd "$PROJECT_DIR/frontend"
+  cd "$PROJECT_DIR/apps/frontend"
   pnpm test
 }
 

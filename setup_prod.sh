@@ -173,11 +173,11 @@ EOF
 echo -e "${GREEN}✓ .env file created successfully!${NC}"
 
 # Create frontend .env.local if it doesn't exist
-if [ ! -f "frontend/.env.local" ]; then
+if [ ! -f "apps/frontend/.env.local" ]; then
     echo ""
-    echo -e "${BLUE}📝 Creating frontend/.env.local...${NC}"
+    echo -e "${BLUE}📝 Creating apps/frontend/.env.local...${NC}"
     
-    cat > frontend/.env.local << EOF
+    cat > apps/frontend/.env.local << EOF
 # Frontend Environment Variables
 # Generated on $(date)
 
@@ -185,9 +185,9 @@ NEXT_PUBLIC_BACKEND_HTTP_URL=$BACKEND_URL
 NEXT_PUBLIC_BACKEND_WS_URL=$(echo $BACKEND_URL | sed 's/^http/ws/')
 EOF
     
-    echo -e "${GREEN}✓ frontend/.env.local created successfully!${NC}"
+    echo -e "${GREEN}✓ apps/frontend/.env.local created successfully!${NC}"
 else
-    echo -e "${YELLOW}⚠️  frontend/.env.local already exists, skipping...${NC}"
+    echo -e "${YELLOW}⚠️  apps/frontend/.env.local already exists, skipping...${NC}"
 fi
 
 echo ""
