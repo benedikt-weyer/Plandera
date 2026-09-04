@@ -72,6 +72,7 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
             return {
               id: project.id,
               name: decryptedData.name,
+              description: decryptedData.description,
               color: decryptedData.color,
               parentId: project.parent_id,
               order: project.display_order ?? 0,
@@ -101,11 +102,11 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
               id: calendar.id,
               name: decryptedData.name,
               color: decryptedData.color,
-              isVisible: decryptedData.isVisible ?? true,
+              isVisible: decryptedData.is_visible ?? true,
               isDefault: calendar.is_default,
               type: decryptedData.type || 'Regular',
-              icsUrl: decryptedData.icsUrl,
-              lastSync: decryptedData.lastSync,
+              icsUrl: decryptedData.ics_url,
+              lastSync: decryptedData.last_sync,
               createdAt: calendar.created_at,
               updatedAt: calendar.updated_at,
               user_id: calendar.user_id
