@@ -3,15 +3,19 @@
 import { getBackend } from '@/utils/api/backend-interface';
 import { getDecryptedBackend } from '@/utils/api/decrypted-backend';
 import { encryptData, generateSalt, generateIV, deriveKeyFromPassword } from '@/utils/cryptography/encryption';
-import { 
-  CanDoItemDecrypted, 
-  CanDoItemEncrypted, 
-  ProjectDecrypted, 
-  ProjectEncrypted, 
-  CalendarDecrypted, 
+import {
+  CanDoItemDecrypted,
+  CanDoItemEncrypted,
+  ProjectDecrypted,
+  ProjectEncrypted,
+  CalendarDecrypted,
   CalendarEncrypted,
   CalendarEventDecrypted,
-  CalendarEventEncrypted
+  CalendarEventEncrypted,
+  CountdownDecrypted,
+  CountdownEncrypted,
+  UserSettingsDecrypted,
+  UserSettingsEncrypted
 } from '@/utils/api/types';
 
 export interface ExportedData {
@@ -23,6 +27,8 @@ export interface ExportedData {
     projects: ProjectDecrypted[];
     calendars: CalendarDecrypted[];
     calendar_events: CalendarEventDecrypted[];
+    countdowns: CountdownEncrypted[];
+    user_settings?: UserSettingsEncrypted;
   };
 }
 
@@ -70,6 +76,11 @@ export interface DecryptedCalendarEvent extends Omit<CalendarEventDecrypted, 'cr
   updatedAt: string;
 }
 
+export interface DecryptedCountdown extends Omit<CountdownDecrypted, 'created_at' | 'updated_at'> {
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DecryptedExportData {
   version: string;
   timestamp: string;
@@ -79,6 +90,8 @@ export interface DecryptedExportData {
     projects: DecryptedProject[];
     calendars: DecryptedCalendar[];
     calendarEvents: DecryptedCalendarEvent[];
+    countdowns: DecryptedCountdown[];
+    userSettings?: UserSettingsDecrypted;
     profile?: any;
   };
 }
@@ -101,11 +114,13 @@ export async function exportUserData(): Promise<ExportedData> {
     }
 
     // Fetch all user data using decrypted backend
-    const [canDoListResult, projectsResult, calendarsResult, calendarEventsResult] = await Promise.all([
+    const [canDoListResult, projectsResult, calendarsResult, calendarEventsResult, countdownsResult, userSettingsResult] = await Promise.all([
       decryptedBackend.canDoList.getAll(),
       decryptedBackend.projects.getAll({ all: true }), // Get all projects including children
       decryptedBackend.calendars.getAll(),
       decryptedBackend.calendarEvents.getAll(),
+      decryptedBackend.countdowns.getAll(),
+      decryptedBackend.userSettings.get(),
     ]);
 
     return {
@@ -117,6 +132,8 @@ export async function exportUserData(): Promise<ExportedData> {
         projects: projectsResult.data || [],
         calendars: calendarsResult.data || [],
         calendar_events: calendarEventsResult.data || [],
+        countdowns: (countdownsResult.data || []) as any,
+        user_settings: userSettingsResult.data as any,
       },
     };
   } catch (error) {
@@ -276,6 +293,18 @@ export async function importDecryptedUserData(data: DecryptedExportData, encrypt
       }, encryptionKey);
     });
 
+    const countdowns = (data.data.countdowns || []).map(countdown => ({
+      ...encryptItem({
+        target: countdown.target,
+        task_id: countdown.task_id,
+      }, encryptionKey),
+      event_id: countdown.event_id,
+    }));
+
+    const user_settings = data.data.userSettings
+      ? encryptItem(data.data.userSettings, encryptionKey)
+      : undefined;
+
     // Convert to ExportedData format and delegate to main import
     const exportData: ExportedData = {
       version: data.version,
@@ -286,6 +315,8 @@ export async function importDecryptedUserData(data: DecryptedExportData, encrypt
         projects: projects as any,
         calendars: calendars as any,
         calendar_events: calendar_events as any,
+        countdowns: countdowns as any,
+        user_settings: user_settings as any,
       }
     };
 

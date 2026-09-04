@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useError } from '@/utils/context/ErrorContext';
 import { useTranslation } from '@/utils/context/LanguageContext';
-import { exportUserData, type ExportedData, type DecryptedExportData, type DecryptedTask, type DecryptedProject, type DecryptedCalendar, type DecryptedCalendarEvent } from '@/app/settings/api';
+import { exportUserData, type ExportedData, type DecryptedExportData, type DecryptedTask, type DecryptedProject, type DecryptedCalendar, type DecryptedCalendarEvent, type DecryptedCountdown } from '@/app/settings/api';
 import { encryptData, generateIV, generateSalt, deriveKeyFromPassword, decryptData } from '@/utils/cryptography/encryption';
 import { Download, Lock, Unlock, Copy, FileText } from 'lucide-react';
 
@@ -177,6 +177,43 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
         .filter((event): event is NonNullable<typeof event> => event !== null);
     };
 
+    const decryptCountdowns = (countdowns: any[]): DecryptedCountdown[] => {
+      return countdowns
+        .map(countdown => {
+          try {
+            const decryptionKey = deriveKeyFromPassword(key, countdown.salt);
+            const decryptedData = decryptData(countdown.encrypted_data, decryptionKey, countdown.iv);
+
+            if (!decryptedData) return null;
+
+            return {
+              id: countdown.id,
+              event_id: countdown.event_id,
+              target: decryptedData.target,
+              task_id: decryptedData.task_id,
+              createdAt: countdown.created_at,
+              updatedAt: countdown.updated_at,
+              user_id: countdown.user_id
+            };
+          } catch (error) {
+            console.error('Failed to decrypt countdown:', error);
+            return null;
+          }
+        })
+        .filter((countdown): countdown is NonNullable<typeof countdown> => countdown !== null);
+    };
+
+    const decryptUserSettings = (settings: any) => {
+      if (!settings?.encrypted_data) return undefined;
+      try {
+        const decryptionKey = deriveKeyFromPassword(key, settings.salt);
+        return decryptData(settings.encrypted_data, decryptionKey, settings.iv) || undefined;
+      } catch (error) {
+        console.error('Failed to decrypt user settings:', error);
+        return undefined;
+      }
+    };
+
     return {
       version: rawData.version,
       timestamp: rawData.timestamp,
@@ -186,6 +223,8 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
         projects: decryptProjects(rawData.data.projects),
         calendars: decryptCalendars(rawData.data.calendars),
         calendarEvents: decryptCalendarEvents(rawData.data.calendar_events),
+        countdowns: decryptCountdowns(rawData.data.countdowns || []),
+        userSettings: decryptUserSettings(rawData.data.user_settings),
         profile: undefined
       }
     };

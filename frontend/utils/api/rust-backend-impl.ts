@@ -872,11 +872,13 @@ class RustBackendImpl implements BackendInterface {
       }
 
       // Fetch all user data
-      const [canDoListResult, projectsResult, calendarsResult, calendarEventsResult] = await Promise.all([
+      const [canDoListResult, projectsResult, calendarsResult, calendarEventsResult, countdownsResult, userSettingsResult] = await Promise.all([
         this.canDoList.getAll(),
         this.projects.getAll({ all: true }), // Get all projects including children
         this.calendars.getAll(),
         this.calendarEvents.getAll(),
+        this.countdowns.getAll(),
+        this.userSettings.get(),
       ]);
 
       return {
@@ -888,6 +890,8 @@ class RustBackendImpl implements BackendInterface {
           projects: projectsResult.data || [],
           calendars: calendarsResult.data || [],
           calendar_events: calendarEventsResult.data || [],
+          countdowns: countdownsResult.data || [],
+          user_settings: userSettingsResult.data || undefined,
         },
       };
     },
@@ -926,9 +930,9 @@ class RustBackendImpl implements BackendInterface {
       if (data.data?.calendars) {
         for (const calendar of data.data.calendars) {
           await this.calendars.create({
-            encrypted_data: calendar.encrypted_data || JSON.stringify(calendar),
-            iv: calendar.iv || 'placeholder_iv',
-            salt: calendar.salt || 'placeholder_salt',
+            encrypted_data: calendar.encrypted_data,
+            iv: calendar.iv,
+            salt: calendar.salt,
             is_default: calendar.is_default || false,
           });
         }
@@ -943,6 +947,27 @@ class RustBackendImpl implements BackendInterface {
             salt: event.salt,
           });
         }
+      }
+
+      // Import countdowns
+      if (data.data?.countdowns) {
+        for (const countdown of data.data.countdowns) {
+          await this.countdowns.create({
+            event_id: countdown.event_id,
+            encrypted_data: countdown.encrypted_data,
+            iv: countdown.iv,
+            salt: countdown.salt,
+          });
+        }
+      }
+
+      // Import user settings
+      if (data.data?.user_settings?.encrypted_data) {
+        await this.userSettings.update({
+          encrypted_data: data.data.user_settings.encrypted_data,
+          iv: data.data.user_settings.iv,
+          salt: data.data.user_settings.salt,
+        });
       }
     },
 
