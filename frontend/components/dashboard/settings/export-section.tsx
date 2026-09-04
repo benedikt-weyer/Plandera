@@ -126,30 +126,37 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
             const decryptedData = decryptData(event.encrypted_data, decryptionKey, event.iv);
             
             if (!decryptedData) return null;
-            
-            // Construct recurrence pattern from decrypted data
+
+            // Construct recurrence pattern from the recurrence_rule JSON string
             let recurrencePattern = undefined;
-            if (decryptedData.recurrenceFrequency && decryptedData.recurrenceFrequency !== 'none') {
-              recurrencePattern = {
-                frequency: decryptedData.recurrenceFrequency,
-                interval: decryptedData.recurrenceInterval || 1,
-                endDate: decryptedData.recurrenceEndDate,
-                daysOfWeek: decryptedData.daysOfWeek
-              };
+            if (decryptedData.recurrence_rule) {
+              try {
+                const rule = JSON.parse(decryptedData.recurrence_rule);
+                if (rule.frequency && rule.frequency !== 'none') {
+                  recurrencePattern = {
+                    frequency: rule.frequency,
+                    interval: rule.interval || 1,
+                    endDate: rule.end_date,
+                    daysOfWeek: rule.days_of_week
+                  };
+                }
+              } catch (error) {
+                console.error('Failed to parse recurrence rule:', error);
+              }
             }
-            
+
             return {
               id: event.id,
               title: decryptedData.title,
               description: decryptedData.description,
               location: decryptedData.location,
-              startTime: decryptedData.startTime,
-              endTime: decryptedData.endTime,
-              isAllDay: decryptedData.isAllDay,
-              recurrenceRule: decryptedData.recurrenceRule,
+              startTime: decryptedData.start_time,
+              endTime: decryptedData.end_time,
+              isAllDay: decryptedData.all_day,
+              recurrence_rule: decryptedData.recurrence_rule,
               recurrencePattern: recurrencePattern,
-              recurrenceException: decryptedData.recurrenceException,
-              calendarId: decryptedData.calendarId,
+              recurrence_exception: decryptedData.recurrence_exception,
+              calendarId: decryptedData.calendar_id,
               createdAt: event.created_at,
               updatedAt: event.updated_at,
               user_id: event.user_id
