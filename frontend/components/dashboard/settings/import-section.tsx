@@ -348,7 +348,7 @@ export function ImportSection({ encryptionKey }: ImportSectionProps) {
       if (preview.isDecrypted) {
         await importDecryptedUserData(preview.data as DecryptedExportData, encryptionKey);
       } else {
-        await importUserData(preview.data as ExportedData);
+        await importUserData(preview.data as ExportedData, encryptionKey);
       }
       
       setError(''); // Clear any previous errors

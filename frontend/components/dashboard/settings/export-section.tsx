@@ -8,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useError } from '@/utils/context/ErrorContext';
 import { useTranslation } from '@/utils/context/LanguageContext';
-import { exportUserData, type ExportedData, type DecryptedExportData, type DecryptedTask, type DecryptedProject, type DecryptedCalendar, type DecryptedCalendarEvent, type DecryptedCountdown } from '@/app/settings/api';
-import { encryptData, generateIV, generateSalt, deriveKeyFromPassword, decryptData } from '@/utils/cryptography/encryption';
+import { exportUserData, decryptExportedData, type ExportedData, type DecryptedExportData } from '@/app/settings/api';
+import { encryptData, generateIV, generateSalt, deriveKeyFromPassword } from '@/utils/cryptography/encryption';
 import { Download, Lock, Unlock, Copy, FileText } from 'lucide-react';
 
 interface ExportSectionProps {
@@ -27,209 +27,6 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
   const { setError } = useError();
   const { t } = useTranslation();
 
-  const decryptExportData = (rawData: ExportedData, key: string): DecryptedExportData => {
-    const decryptTasks = (tasks: any[]): DecryptedTask[] => {
-      return tasks
-        .map(task => {
-          try {
-            const decryptionKey = deriveKeyFromPassword(key, task.salt);
-            const decryptedData = decryptData(task.encrypted_data, decryptionKey, task.iv);
-            
-            if (!decryptedData) return null;
-            
-            return {
-              id: task.id,
-              content: decryptedData.content,
-              completed: decryptedData.completed,
-              estimatedDuration: decryptedData.duration_minutes,
-              impact: decryptedData.impact,
-              urgency: decryptedData.urgency,
-              dueDate: decryptedData.due_date,
-              blockedBy: decryptedData.blocked_by,
-              tags: decryptedData.tags,
-              my_day: decryptedData.my_day,
-              parent_task_id: decryptedData.parent_task_id,
-              projectId: task.project_id,
-              displayOrder: task.display_order ?? 0,
-              createdAt: task.created_at,
-              updatedAt: task.updated_at,
-              user_id: task.user_id
-            };
-          } catch (error) {
-            console.error('Failed to decrypt task:', error);
-            return null;
-          }
-        })
-        .filter((task): task is NonNullable<typeof task> => task !== null);
-    };
-
-    const decryptProjects = (projects: any[]): DecryptedProject[] => {
-      return projects
-        .map(project => {
-          try {
-            const decryptionKey = deriveKeyFromPassword(key, project.salt);
-            const decryptedData = decryptData(project.encrypted_data, decryptionKey, project.iv);
-            
-            if (!decryptedData) return null;
-            
-            return {
-              id: project.id,
-              name: decryptedData.name,
-              description: decryptedData.description,
-              color: decryptedData.color,
-              parentId: project.parent_id,
-              order: project.display_order ?? 0,
-              isCollapsed: project.is_collapsed ?? false,
-              createdAt: project.created_at,
-              updatedAt: project.updated_at,
-              user_id: project.user_id
-            };
-          } catch (error) {
-            console.error('Failed to decrypt project:', error);
-            return null;
-          }
-        })
-        .filter((project): project is NonNullable<typeof project> => project !== null);
-    };
-
-    const decryptCalendars = (calendars: any[]): DecryptedCalendar[] => {
-      return calendars
-        .map(calendar => {
-          try {
-            const decryptionKey = deriveKeyFromPassword(key, calendar.salt);
-            const decryptedData = decryptData(calendar.encrypted_data, decryptionKey, calendar.iv);
-            
-            if (!decryptedData) return null;
-            
-            return {
-              id: calendar.id,
-              name: decryptedData.name,
-              color: decryptedData.color,
-              isVisible: decryptedData.is_visible ?? true,
-              isDefault: calendar.is_default,
-              type: decryptedData.type || 'Regular',
-              icsUrl: decryptedData.ics_url,
-              lastSync: decryptedData.last_sync,
-              createdAt: calendar.created_at,
-              updatedAt: calendar.updated_at,
-              user_id: calendar.user_id
-            };
-          } catch (error) {
-            console.error('Failed to decrypt calendar:', error);
-            return null;
-          }
-        })
-        .filter((calendar): calendar is NonNullable<typeof calendar> => calendar !== null);
-    };
-
-    const decryptCalendarEvents = (events: any[]): DecryptedCalendarEvent[] => {
-      return events
-        .map(event => {
-          try {
-            const decryptionKey = deriveKeyFromPassword(key, event.salt);
-            const decryptedData = decryptData(event.encrypted_data, decryptionKey, event.iv);
-            
-            if (!decryptedData) return null;
-
-            // Construct recurrence pattern from the recurrence_rule JSON string
-            let recurrencePattern = undefined;
-            if (decryptedData.recurrence_rule) {
-              try {
-                const rule = JSON.parse(decryptedData.recurrence_rule);
-                if (rule.frequency && rule.frequency !== 'none') {
-                  recurrencePattern = {
-                    frequency: rule.frequency,
-                    interval: rule.interval || 1,
-                    endDate: rule.end_date,
-                    daysOfWeek: rule.days_of_week
-                  };
-                }
-              } catch (error) {
-                console.error('Failed to parse recurrence rule:', error);
-              }
-            }
-
-            return {
-              id: event.id,
-              title: decryptedData.title,
-              description: decryptedData.description,
-              location: decryptedData.location,
-              startTime: decryptedData.start_time,
-              endTime: decryptedData.end_time,
-              isAllDay: decryptedData.all_day,
-              recurrence_rule: decryptedData.recurrence_rule,
-              recurrencePattern: recurrencePattern,
-              recurrence_exception: decryptedData.recurrence_exception,
-              calendarId: decryptedData.calendar_id,
-              is_group_event: decryptedData.is_group_event,
-              is_task_reservation_space: decryptedData.is_task_reservation_space,
-              parent_group_event_id: decryptedData.parent_group_event_id,
-              task_id: decryptedData.task_id,
-              createdAt: event.created_at,
-              updatedAt: event.updated_at,
-              user_id: event.user_id
-            };
-          } catch (error) {
-            console.error('Failed to decrypt calendar event:', error);
-            return null;
-          }
-        })
-        .filter((event): event is NonNullable<typeof event> => event !== null);
-    };
-
-    const decryptCountdowns = (countdowns: any[]): DecryptedCountdown[] => {
-      return countdowns
-        .map(countdown => {
-          try {
-            const decryptionKey = deriveKeyFromPassword(key, countdown.salt);
-            const decryptedData = decryptData(countdown.encrypted_data, decryptionKey, countdown.iv);
-
-            if (!decryptedData) return null;
-
-            return {
-              id: countdown.id,
-              event_id: countdown.event_id,
-              target: decryptedData.target,
-              task_id: decryptedData.task_id,
-              createdAt: countdown.created_at,
-              updatedAt: countdown.updated_at,
-              user_id: countdown.user_id
-            };
-          } catch (error) {
-            console.error('Failed to decrypt countdown:', error);
-            return null;
-          }
-        })
-        .filter((countdown): countdown is NonNullable<typeof countdown> => countdown !== null);
-    };
-
-    const decryptUserSettings = (settings: any) => {
-      if (!settings?.encrypted_data) return undefined;
-      try {
-        const decryptionKey = deriveKeyFromPassword(key, settings.salt);
-        return decryptData(settings.encrypted_data, decryptionKey, settings.iv) || undefined;
-      } catch (error) {
-        console.error('Failed to decrypt user settings:', error);
-        return undefined;
-      }
-    };
-
-    return {
-      version: rawData.version,
-      timestamp: rawData.timestamp,
-      userId: rawData.userId,
-      data: {
-        tasks: decryptTasks(rawData.data.can_do_list),
-        projects: decryptProjects(rawData.data.projects),
-        calendars: decryptCalendars(rawData.data.calendars),
-        calendarEvents: decryptCalendarEvents(rawData.data.calendar_events),
-        countdowns: decryptCountdowns(rawData.data.countdowns || []),
-        userSettings: decryptUserSettings(rawData.data.user_settings),
-        profile: undefined
-      }
-    };
-  };
-
   const handleExport = async () => {
     if (usePasswordProtection && !password.trim()) {
       setError(t('settings.pleaseEnterPassword'));
@@ -245,7 +42,7 @@ export function ExportSection({ encryptionKey }: ExportSectionProps) {
 
       // Determine what data to export based on format
       if (exportFormat === 'decrypted') {
-        const decryptedData = decryptExportData(rawData, encryptionKey);
+        const decryptedData = decryptExportedData(rawData, encryptionKey);
         dataToExport = decryptedData;
         setDecryptedExportedData(decryptedData);
         setExportedData(null);
