@@ -118,7 +118,7 @@ The Rust backend needs to implement the following endpoint to support SSO:
 
 #### Step 1: Add SSO Configuration
 
-In `backend/.env`:
+In `apps/backend/.env`:
 ```bash
 # Streamline Account SSO
 AUTH_SERVER_URL=http://localhost:3001
@@ -127,7 +127,7 @@ ENABLE_SSO=true
 
 #### Step 2: Create SSO Token Validation
 
-**File**: `backend/src/auth/sso.rs`
+**File**: `apps/backend/src/auth/sso.rs`
 
 ```rust
 use reqwest::Client;
@@ -182,7 +182,7 @@ pub async fn validate_sso_token(
 
 #### Step 3: Add SSO Exchange Handler
 
-**File**: `backend/src/handlers/auth.rs`
+**File**: `apps/backend/src/handlers/auth.rs`
 
 ```rust
 use axum::{
@@ -279,7 +279,7 @@ pub async fn sso_exchange(
 
 #### Step 4: Register the Route
 
-**File**: `backend/src/main.rs` or `backend/src/handlers/mod.rs`
+**File**: `apps/backend/src/main.rs` or `apps/backend/src/handlers/mod.rs`
 
 ```rust
 // Add to your router

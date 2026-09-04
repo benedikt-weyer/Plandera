@@ -39,7 +39,7 @@ pnpm exec jest test/path/to/file.test.ts   # single test file
 Test files live under `frontend/test/` (mirroring `app/`, `components/`, `utils/`), matched by
 `test/**/*.test.ts?(x)`, not colocated with source. `@/*` path alias maps to the frontend root.
 
-### Backend (`backend/`, Rust 2024 edition)
+### Backend (`apps/backend/`, Rust 2024 edition)
 
 ```bash
 cargo run                       # applies SeaORM migrations on startup, then serves
@@ -50,7 +50,7 @@ cargo fmt && cargo clippy
 ```
 
 Requires `DATABASE_URL` and `JWT_SECRET` env vars (set automatically by the Nix shellHook from `.env`,
-or copy `backend/env.example` to `backend/.env` for manual setup).
+or copy `apps/backend/env.example` to `apps/backend/.env` for manual setup).
 
 ## Architecture
 
@@ -58,7 +58,7 @@ or copy `backend/env.example` to `backend/.env` for manual setup).
 
 The server never sees plaintext. Every user-data table (`calendar_events`, `can_do_list`, `projects`,
 `calendars`, `countdowns`, `user_settings`) stores only opaque `encrypted_data` + `iv` + `salt` columns
-(see `backend/src/entities/`) — the Rust backend has no notion of an event's title, a task's due date,
+(see `apps/backend/src/entities/`) — the Rust backend has no notion of an event's title, a task's due date,
 etc., it just stores and returns ciphertext blobs.
 
 Client-side (`frontend/utils/cryptography/encryption.ts`): a master password is PBKDF2-derived into
@@ -92,17 +92,17 @@ flows through the API layers above and is kept in sync via WebSocket push.
 
 ### Backend request flow
 
-`backend/src/main.rs` wires two router groups: public (`/api/auth/register`, `/api/auth/login`,
+`apps/backend/src/main.rs` wires two router groups: public (`/api/auth/register`, `/api/auth/login`,
 `/health`, `/ws`) and protected, where `middleware::auth::auth_middleware` validates the JWT and injects
-`AuthUser` as an extractor for handlers. Handlers (`backend/src/handlers/`) follow a consistent
-CRUD-per-resource shape backed by SeaORM entities (`backend/src/entities/`), scoping every query by
-`user_id`. Migrations are plain SeaORM migration files under `backend/src/migrator/`, numbered
+`AuthUser` as an extractor for handlers. Handlers (`apps/backend/src/handlers/`) follow a consistent
+CRUD-per-resource shape backed by SeaORM entities (`apps/backend/src/entities/`), scoping every query by
+`user_id`. Migrations are plain SeaORM migration files under `apps/backend/src/migrator/`, numbered
 sequentially, and run automatically at startup (`Migrator::up`) — a schema change means adding a new
 migration file, not editing an old one.
 
 ### Real-time sync (WebSocket)
 
-`backend/src/websocket/mod.rs`: `WebSocketState` maps `user_id -> Vec<WebSocketConnection>` (multiple
+`apps/backend/src/websocket/mod.rs`: `WebSocketState` maps `user_id -> Vec<WebSocketConnection>` (multiple
 tabs/devices per user), each connection identified by a `connection_id`. On connect, the client's first
 message must carry the JWT for auth. After any mutating handler writes to the DB, it calls
 `ws_state.broadcast_to_user(user_id, message, connection_id)`, passing its *own* connection_id as

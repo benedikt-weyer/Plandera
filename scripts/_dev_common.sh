@@ -127,7 +127,7 @@ ensure_root_env() {
 }
 
 ensure_backend_env() {
-  local backend_dir="$PROJECT_DIR/backend"
+  local backend_dir="$PROJECT_DIR/apps/backend"
   local backend_env="$backend_dir/.env"
 
   cd "$backend_dir"
@@ -210,7 +210,7 @@ start_backend() {
   ensure_backend_env
 
   echo "Starting Rust backend server..."
-  cd "$PROJECT_DIR/backend"
+  cd "$PROJECT_DIR/apps/backend"
   : >"$BACKEND_LOG_FILE"
   nohup cargo watch -x run >"$BACKEND_LOG_FILE" 2>&1 &
   echo $! >"$BACKEND_PID_FILE"
@@ -291,7 +291,7 @@ restart_all() {
 }
 
 build_backend() {
-  cd "$PROJECT_DIR/backend"
+  cd "$PROJECT_DIR/apps/backend"
   cargo build --release
 }
 
@@ -301,7 +301,7 @@ build_frontend() {
 }
 
 test_backend() {
-  cd "$PROJECT_DIR/backend"
+  cd "$PROJECT_DIR/apps/backend"
   cargo test
 }
 
@@ -311,7 +311,7 @@ test_frontend() {
 }
 
 run_migrations() {
-  cd "$PROJECT_DIR/backend"
+  cd "$PROJECT_DIR/apps/backend"
   cargo run --bin migrator
 }
 

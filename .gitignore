@@ -9,8 +9,10 @@ certs/
 docker-compose.override.yml
 docker-compose.override.yaml
 
-backend/target/
+apps/backend/target/
 
 # turborepo / pnpm workspace
 node_modules/
 .turbo/
+
+.direnv/

@@ -38,13 +38,13 @@ Testing guides and procedures for quality assurance.
 ## 📖 Component-Specific Documentation
 
 ### Backend
-See [backend/README.md](../backend/README.md) and [backend/API.md](../backend/API.md) for backend-specific documentation.
+See [apps/backend/README.md](../../apps/backend/README.md) and [apps/backend/API.md](../../apps/backend/API.md) for backend-specific documentation.
 
 ### Frontend
-See [apps/frontend/README.md](../apps/frontend/README.md) for frontend-specific documentation.
+See [apps/frontend/README.md](../../apps/frontend/README.md) for frontend-specific documentation.
 
 ### Internationalization
-See [apps/frontend/utils/i18n/README.md](../apps/frontend/utils/i18n/README.md) for translation and localization guides.
+See [apps/frontend/utils/i18n/README.md](../../apps/frontend/utils/i18n/README.md) for translation and localization guides.
 
 ---
 
@@ -53,7 +53,7 @@ See [apps/frontend/utils/i18n/README.md](../apps/frontend/utils/i18n/README.md) 
 ### For Developers
 - Start with [Complete Setup Summary](deployment/COMPLETE_SETUP_SUMMARY.md)
 - Review [Workflows Architecture](architecture/WORKFLOWS_ARCHITECTURE.md)
-- Check [API Documentation](../backend/API.md)
+- Check [API Documentation](../../apps/backend/API.md)
 
 ### For DevOps Engineers
 - Read [Kubernetes Deployment](deployment/KUBERNETES_DEPLOYMENT.md)

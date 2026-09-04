@@ -37,7 +37,7 @@ Streamline Scheduler (rebranding to Plandera) can be easily self-hosted on your 
 
 ### Deployment Options
 
-1. **Kubernetes** (Recommended for production) - See [docs/deployment/K8S_QUICKSTART.md](./docs/deployment/K8S_QUICKSTART.md) and [docs/deployment/KUBERNETES_DEPLOYMENT.md](./docs/deployment/KUBERNETES_DEPLOYMENT.md)
+1. **Kubernetes** (Recommended for production) - See [apps/docs/deployment/K8S_QUICKSTART.md](./apps/docs/deployment/K8S_QUICKSTART.md) and [apps/docs/deployment/KUBERNETES_DEPLOYMENT.md](./apps/docs/deployment/KUBERNETES_DEPLOYMENT.md)
 2. **Docker Compose** (Good for local development and simple deployments)
 
 ### Quick Start with Kubernetes
@@ -45,7 +45,7 @@ Streamline Scheduler (rebranding to Plandera) can be easily self-hosted on your 
 For Kubernetes deployment with staging and production environments:
 
 ```bash
-# Quick setup - see docs/deployment/K8S_QUICKSTART.md for details
+# Quick setup - see apps/docs/deployment/K8S_QUICKSTART.md for details
 kubectl apply -f k8s/staging/  # For staging
 kubectl apply -f k8s/production/  # For production
 ```
@@ -56,7 +56,7 @@ kubectl apply -f k8s/production/  # For production
 - TLS certificates via cert-manager
 - Horizontal scaling support
 
-See [docs/deployment/K8S_QUICKSTART.md](./docs/deployment/K8S_QUICKSTART.md) for quick start and [docs/deployment/KUBERNETES_DEPLOYMENT.md](./docs/deployment/KUBERNETES_DEPLOYMENT.md) for comprehensive documentation.
+See [apps/docs/deployment/K8S_QUICKSTART.md](./apps/docs/deployment/K8S_QUICKSTART.md) for quick start and [apps/docs/deployment/KUBERNETES_DEPLOYMENT.md](./apps/docs/deployment/KUBERNETES_DEPLOYMENT.md) for comprehensive documentation.
 
 ### Quick Start with Docker Compose
 
@@ -70,7 +70,7 @@ See [docs/deployment/K8S_QUICKSTART.md](./docs/deployment/K8S_QUICKSTART.md) for
 
    ```bash
    # Create environment file for the backend
-   cp backend/env.example backend/.env
+   cp apps/backend/env.example apps/backend/.env
    
    # Create environment file for the frontend
    cp apps/frontend/env.example apps/frontend/.env.local
@@ -164,7 +164,7 @@ JWT_SECRET=your-super-secret-jwt-token-with-at-least-32-characters-long
    cd streamline-scheduler
    
    # Set up production environment
-   cp backend/env.example backend/.env.production
+   cp apps/backend/env.example apps/backend/.env.production
    cp apps/frontend/env.example apps/frontend/.env.production
    # Edit .env.production files with production settings
    
@@ -283,7 +283,7 @@ The project includes a comprehensive `shell.nix` file that sets up a complete de
 
 2. **Setup Backend**:
    ```bash
-   cd backend
+   cd apps/backend
    
    # Set up environment
    cp env.example .env
@@ -335,7 +335,7 @@ streamline-scheduler/
 │   ├── hooks/              # Custom React hooks
 │   ├── Dockerfile          # Frontend container
 │   └── package.json
-├── backend/                # Rust backend application
+├── apps/backend/            # Rust backend application
 │   ├── src/
 │   │   ├── entities/       # Database entities (SeaORM)
 │   │   ├── handlers/       # API route handlers
@@ -393,8 +393,8 @@ This project is licensed under a custom license by Benedikt Weyer. You may use i
 
 For detailed documentation, see the [docs](./docs) directory:
 
-- **[Documentation Index](./docs/INDEX.md)** - Complete documentation overview
-- **[Deployment Guides](./docs/deployment)** - CI/CD, Kubernetes, and deployment setup
-- **[Architecture](./docs/architecture)** - System design and workflows
-- **[Integration Guides](./docs/integration)** - SSO and third-party integrations
-- **[Testing](./docs/testing)** - Manual and automated testing procedures
+- **[Documentation Index](./apps/docs/INDEX.md)** - Complete documentation overview
+- **[Deployment Guides](./apps/docs/deployment)** - CI/CD, Kubernetes, and deployment setup
+- **[Architecture](./apps/docs/architecture)** - System design and workflows
+- **[Integration Guides](./apps/docs/integration)** - SSO and third-party integrations
+- **[Testing](./apps/docs/testing)** - Manual and automated testing procedures

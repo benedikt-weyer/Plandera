@@ -43,7 +43,7 @@ services:
   # Rust backend
   backend:
     build:
-      context: ./backend
+      context: ./apps/backend
       dockerfile: Dockerfile
       args:
         - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}@db:5432/${POSTGRES_DB:-streamline_scheduler}

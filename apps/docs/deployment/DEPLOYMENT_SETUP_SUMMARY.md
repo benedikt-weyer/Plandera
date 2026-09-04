@@ -52,7 +52,7 @@ This document provides a complete overview of the Kubernetes deployment setup fo
 
 ### Docker Configuration
 
-- **backend/.dockerignore** - Optimizes backend Docker builds
+- **apps/backend/.dockerignore** - Optimizes backend Docker builds
 - **.dockerignore** - Optimizes frontend Docker builds
 
 ## Quick Start Guide
@@ -142,7 +142,7 @@ streamline-scheduler/
 │   └── workflows/
 │       ├── deploy-staging.yml    # Staging CI/CD
 │       └── deploy-production.yml # Production CI/CD
-├── backend/                      # Rust backend
+├── apps/backend/                 # Rust backend
 │   ├── Dockerfile
 │   └── .dockerignore
 ├── apps/frontend/                # Next.js frontend
@@ -150,7 +150,7 @@ streamline-scheduler/
 │   └── .dockerignore
 ├── deploy.sh                     # Deployment helper
 ├── setup-k8s-secrets.sh         # Secrets helper
-└── docs/
+└── apps/docs/
     ├── KUBERNETES_DEPLOYMENT.md
     ├── K8S_QUICKSTART.md
     ├── GITHUB_ACTIONS_SETUP.md

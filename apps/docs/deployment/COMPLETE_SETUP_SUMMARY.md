@@ -106,7 +106,7 @@ k8s/
 - `DEPLOYMENT_SETUP_SUMMARY.md` - Complete overview
 
 **Docker Optimization:**
-- `backend/.dockerignore`
+- `apps/backend/.dockerignore`
 - `frontend/.dockerignore`
 
 **Updated:**

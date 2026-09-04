@@ -58,7 +58,7 @@ This document provides an overview of the CI/CD pipeline for Plandera (formerly 
 **Trigger**: Automatic on push to `main` branch
 
 1. **Build Backend**
-   - Build Docker image from `backend/Dockerfile`
+   - Build Docker image from `apps/backend/Dockerfile`
    - Tag: `ghcr.io/<username>/plandera-backend:staging-latest`
    - Tag: `ghcr.io/<username>/plandera-backend:staging-<sha>`
    - Push to GitHub Container Registry
@@ -91,7 +91,7 @@ This document provides an overview of the CI/CD pipeline for Plandera (formerly 
    - Prevents accidental deployments
 
 2. **Build Backend**
-   - Build Docker image from `backend/Dockerfile`
+   - Build Docker image from `apps/backend/Dockerfile`
    - Tag: `ghcr.io/<username>/plandera-backend:latest`
    - Tag: `ghcr.io/<username>/plandera-backend:<sha>`
    - Tag: `ghcr.io/<username>/plandera-backend:<tag>` (if tagged)
@@ -271,7 +271,7 @@ If production issues occur:
 **Solution**:
 ```bash
 # Test build locally
-docker build -t test-build ./backend
+docker build -t test-build ./apps/backend
 docker build -f apps/frontend/Dockerfile -t test-build .
 ```
 
