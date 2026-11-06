@@ -44,7 +44,7 @@ const PROJECT_COLORS = [
 const editProjectSchema = z.object({
   name: z.string().min(1, { message: "Project name is required" }).max(50, { message: "Project name must be 50 characters or less" }),
   color: z.string().min(1, { message: "Please select a color" }),
-  parentId: z.string().optional(),
+  parentId: z.string().nullish(),
 });
 
 type EditProjectFormValues = z.infer<typeof editProjectSchema>;
@@ -91,7 +91,7 @@ export default function EditProjectDialog({
       form.reset({
         name: project.name,
         color: project.color || PROJECT_COLORS[0],
-        parentId: project.parent_id
+        parentId: project.parent_id ?? undefined
       });
     }
   }, [project, form]);
@@ -113,7 +113,7 @@ export default function EditProjectDialog({
     
     setIsSaving(true);
     try {
-      const success = await onSave(project.id, (values.name || '').trim(), values.color, values.parentId);
+      const success = await onSave(project.id, (values.name || '').trim(), values.color, values.parentId ?? undefined);
       if (success) {
         handleClose();
       }
