@@ -4,6 +4,7 @@
  */
 
 import { BackendInterface } from './backend-interface';
+import { ApiError, NETWORK_ERROR_MESSAGE, formatApiErrorMessage } from './api-error';
 import {
   createApiToken,
   createPasswordSalt,
@@ -247,10 +248,21 @@ class RustBackendImpl implements BackendInterface {
       headers['X-Connection-Id'] = this.connectionId;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+      });
+    } catch (error) {
+      // fetch() rejects with a TypeError when the server is unreachable
+      // (backend down, offline, CORS, ...). Browsers word it differently
+      // ("Failed to fetch", "NetworkError when attempting to fetch resource.").
+      if (error instanceof TypeError) {
+        throw new ApiError(NETWORK_ERROR_MESSAGE, null);
+      }
+      throw error;
+    }
 
     // The 15-minute access token expired mid-session — use the refresh
     // token to get a new one and retry, exactly once, before giving up.
@@ -268,7 +280,7 @@ class RustBackendImpl implements BackendInterface {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+      throw new ApiError(formatApiErrorMessage(response.status, errorText), response.status);
     }
 
     return response.json();
