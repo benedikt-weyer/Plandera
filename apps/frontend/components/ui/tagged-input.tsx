@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { X, Clock, Info, Zap, Calendar, Folder, Sun, Shield } from 'lucide-react';
 import { cn } from '@/lib/shadcn-utils';
 import { isValidHashtag, getLastWordBeforeCursor } from '@/utils/can-do-list/hashtag-utils';
+import { getBlockingCandidates } from '@/utils/can-do-list/blocking-candidates';
 
 export interface Tag {
   id: string;
@@ -35,7 +36,8 @@ interface TaggedInputProps {
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   availableTagSuggestions?: TagSuggestion[];
   projects?: { id: string; name: string; color?: string; parent_id?: string; }[]; // for project suggestions
-  tasks?: { id: string; content: string; completed?: boolean; project_id?: string; }[]; // for blocked-by (#block) suggestions
+  tasks?: { id: string; content: string; completed?: boolean; project_id?: string; blocked_by?: string; parent_task_id?: string; due_date?: string; }[]; // for blocked-by (#block) suggestions
+  preferredProjectId?: string; // tasks of this project are suggested first for #block (a #pro tag in the input wins)
   autoComplete?: string;
   autoCorrect?: 'on' | 'off';
   autoCapitalize?: 'off' | 'none' | 'on' | 'sentences' | 'words' | 'characters';
@@ -86,6 +88,7 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
     availableTagSuggestions = [],
     projects = [],
     tasks: availableTasks = [],
+    preferredProjectId,
     ...props 
   }, ref) => {
     const [internalTags, setInternalTags] = useState<Tag[]>([]);
@@ -197,23 +200,34 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
     }, [projects]);
 
     // Open tasks that can block a new task. Kept out of the general suggestion list (there can be
-    // many tasks); they are only offered after typing #block.
-    const blockedBySuggestions: TagSuggestion[] = useMemo(() => {
-      const projectsMap = new Map(projects.map(p => [p.id, p]));
+    // many tasks); they are only offered after typing #block. Read through a ref by the dropdown effect,
+    // which only runs when the input text changes.
+    const blockedByContextRef = useRef({ tasks: availableTasks, projects, tags: externalTags ?? internalTags, preferredProjectId });
+    blockedByContextRef.current = { tasks: availableTasks, projects, tags: externalTags ?? internalTags, preferredProjectId };
 
-      return availableTasks
-        .filter(task => !task.completed)
-        .map(task => ({
-          id: `blocked-by-${task.id}`,
-          text: `#block ${task.content}`,
-          description: task.project_id ? projectsMap.get(task.project_id)?.name : undefined,
-          type: 'blocked-by' as const,
-          blockedByTaskId: task.id,
-          blockedByTaskTitle: task.content,
-        }));
-    }, [availableTasks, projects]);
-    const blockedBySuggestionsRef = useRef<TagSuggestion[]>([]);
-    blockedBySuggestionsRef.current = blockedBySuggestions;
+    const buildBlockedBySuggestions = (searchTerm: string): TagSuggestion[] => {
+      const context = blockedByContextRef.current;
+      // A project chosen with #pro in this input wins over the project that is currently selected
+      const projectId = context.tags.find(tag => tag.type === 'project')?.projectId ?? context.preferredProjectId;
+
+      return getBlockingCandidates({
+        tasks: context.tasks,
+        projects: context.projects,
+        preferredProjectId: projectId,
+        query: searchTerm,
+        limit: MAX_BLOCKED_BY_SUGGESTIONS,
+      }).map(candidate => ({
+        id: `blocked-by-${candidate.task.id}`,
+        text: `#block ${candidate.task.content}`,
+        description: [candidate.projectPath, candidate.parentTitle && `subtask of ${candidate.parentTitle}`]
+          .filter(Boolean)
+          .join(' · ') || undefined,
+        type: 'blocked-by' as const,
+        projectColor: candidate.projectColor,
+        blockedByTaskId: candidate.task.id,
+        blockedByTaskTitle: candidate.task.content,
+      }));
+    };
 
     // Update allSuggestionsRef when needed to avoid infinite re-renders
     // Always ensure the ref has the current suggestions
@@ -312,10 +326,8 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
       // Special handling for #block - search the open tasks that can block this one
       const blockedByTrigger = BLOCKED_BY_TRIGGER.exec(lastWord);
       if (blockedByTrigger) {
-        const searchTerm = lastWord.slice(blockedByTrigger[0].length).trim().toLowerCase();
-        const taskSugs = blockedBySuggestionsRef.current
-          .filter(suggestion => !searchTerm || suggestion.blockedByTaskTitle?.toLowerCase().includes(searchTerm))
-          .slice(0, MAX_BLOCKED_BY_SUGGESTIONS);
+        const searchTerm = lastWord.slice(blockedByTrigger[0].length).trim();
+        const taskSugs = buildBlockedBySuggestions(searchTerm);
 
         if (taskSugs.length > 0) {
           updateDropdownPosition();
@@ -1033,7 +1045,7 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
                     <Sun className="h-3 w-3 text-amber-500" />
                   )}
                   {!suggestion.id.startsWith('help-') && suggestion.type === 'blocked-by' && (
-                    <Shield className="h-3 w-3 text-red-500" />
+                    <Shield className="h-3 w-3 shrink-0 text-red-500" />
                   )}
                   <span className={cn(
                     "font-mono text-sm",
@@ -1046,6 +1058,7 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
                 {suggestion.description && (
                   <span className={cn(
                     "text-xs text-muted-foreground",
+                    suggestion.type === 'blocked-by' && "ml-2 truncate max-w-[10rem]",
                     suggestion.id.startsWith('help-') && "font-medium"
                   )}>
                     {suggestion.description}

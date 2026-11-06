@@ -8,14 +8,26 @@ import { extractTaskDataFromTags } from '@/utils/can-do-list/hashtag-utils';
 const tasks = [
   { id: 't1', content: 'Write report', completed: false, project_id: 'p1' },
   { id: 't2', content: 'Review report draft', completed: false },
-  { id: 't3', content: 'Book flights', completed: false },
+  { id: 't3', content: 'Book flights', completed: false, project_id: 'p3' },
   { id: 't4', content: 'Old report', completed: true },
 ];
-const projects = [{ id: 'p1', name: 'Work' }];
+const projects = [
+  { id: 'p1', name: 'Reports', parent_id: 'p0' },
+  { id: 'p0', name: 'Work' },
+  { id: 'p3', name: 'Travel' },
+];
 
-function Harness({ onTags }: { onTags?: (tags: Tag[]) => void }) {
+function Harness({
+  onTags,
+  preferredProjectId,
+  initialTags = [],
+}: {
+  onTags?: (tags: Tag[]) => void;
+  preferredProjectId?: string;
+  initialTags?: Tag[];
+}) {
   const [value, setValue] = useState('');
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [tags, setTags] = useState<Tag[]>(initialTags);
   return (
     <div>
       <TaggedInput
@@ -28,6 +40,7 @@ function Harness({ onTags }: { onTags?: (tags: Tag[]) => void }) {
         }}
         tasks={tasks}
         projects={projects}
+        preferredProjectId={preferredProjectId}
         placeholder="Add task"
       />
       <output data-testid="value">{value}</output>
@@ -46,8 +59,52 @@ describe('TaggedInput #block (blocked by a task)', () => {
     expect(screen.getByText('#block Review report draft')).toBeInTheDocument();
     expect(screen.getByText('#block Book flights')).toBeInTheDocument();
     expect(screen.queryByText('#block Old report')).not.toBeInTheDocument();
-    // the task's project is shown as extra information
-    expect(screen.getByText('Work')).toBeInTheDocument();
+    // the task's project (with its parent project) is shown as extra information
+    expect(screen.getByText('Work / Reports')).toBeInTheDocument();
+    expect(screen.getByText('Travel')).toBeInTheDocument();
+  });
+
+  const listedTitles = () => screen.getAllByText(/^#block /).map((element) => element.textContent);
+
+  it('lists the tasks alphabetically by default', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(screen.getByPlaceholderText('Add task'), '#block');
+    await screen.findByText('#block Write report');
+
+    expect(listedTitles()).toEqual(['#block Book flights', '#block Review report draft', '#block Write report']);
+  });
+
+  it('lists tasks of the currently selected project first', async () => {
+    const user = userEvent.setup();
+    render(<Harness preferredProjectId="p1" />);
+
+    await user.type(screen.getByPlaceholderText('Add task'), '#block');
+    await screen.findByText('#block Write report');
+
+    expect(listedTitles()).toEqual(['#block Write report', '#block Book flights', '#block Review report draft']);
+  });
+
+  it('prefers the project chosen with #pro in the same input over the selected project', async () => {
+    const user = userEvent.setup();
+    const projectTag: Tag = { id: 'pt', text: '#pro Travel', type: 'project', projectId: 'p3', projectName: 'Travel' };
+    render(<Harness preferredProjectId="p1" initialTags={[projectTag]} />);
+
+    await user.type(screen.getByPlaceholderText('Add task'), '#block');
+    await screen.findByText('#block Book flights');
+
+    expect(listedTitles()[0]).toBe('#block Book flights');
+  });
+
+  it('finds tasks by the name of their project', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(screen.getByPlaceholderText('Add task'), '#blocktravel');
+
+    expect(await screen.findByText('#block Book flights')).toBeInTheDocument();
+    expect(screen.queryByText('#block Write report')).not.toBeInTheDocument();
   });
 
   it('filters the tasks by the text typed right after the hashtag', async () => {

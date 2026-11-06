@@ -27,7 +27,9 @@ interface AddTaskFormProps {
   readonly isLoading: boolean;
   readonly projects?: { id: string; name: string }[];
   /** Tasks that can be picked as the blocking task with #block */
-  readonly tasks?: { id: string; content: string; completed?: boolean; project_id?: string }[];
+  readonly tasks?: { id: string; content: string; completed?: boolean; project_id?: string; blocked_by?: string; parent_task_id?: string; due_date?: string }[];
+  /** Tasks of this project are suggested first for #block (normally the project currently shown) */
+  readonly preferredProjectId?: string;
 }
 
 export default function AddTaskForm({
@@ -36,6 +38,7 @@ export default function AddTaskForm({
   isLoading,
   projects = [],
   tasks = [],
+  preferredProjectId,
 }: AddTaskFormProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const { t } = useTranslation();
@@ -77,6 +80,7 @@ export default function AddTaskForm({
                     onTagsChange={setTags}
                     projects={projects}
                     tasks={tasks}
+                    preferredProjectId={preferredProjectId}
                     autoComplete="off"
                     autoCapitalize="off"
                     autoCorrect="off"

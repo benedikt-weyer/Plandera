@@ -32,6 +32,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
 import { CanDoItemDecrypted, ProjectDecrypted, TaskExecutionConstraints } from '@/utils/api/types';
 import { useWeekStartDay } from '@/stores/settings-store';
+import { getBlockingCandidates, type BlockingCandidate } from '@/utils/can-do-list/blocking-candidates';
 import { DEFAULT_PROJECT_NAME } from '@/utils/can-do-list/can-do-list-types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Check, ChevronsUpDown, Link2, Trash2 } from 'lucide-react';
@@ -153,6 +154,7 @@ export default function EditTaskDialog({
 }: EditTaskDialogProps) {
   const { t } = useTranslation();
   const [blockedByOpen, setBlockedByOpen] = useState(false);
+  const [blockedBySearch, setBlockedBySearch] = useState('');
   const [parentTaskOpen, setParentTaskOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'constraints'>('general');
   const weekStartsOn = useWeekStartDay();
@@ -294,6 +296,66 @@ export default function EditTaskDialog({
 
   // Build hierarchical project list
   const hierarchicalProjects = buildHierarchicalProjectList(projects);
+
+  // Tasks that can be picked as blocker: open, not this task, and not creating a blocking cycle.
+  // Tasks of the project chosen in this form come first.
+  const blockedByQuery = blockedBySearch.trim();
+  const blockingCandidates = getBlockingCandidates({
+    tasks,
+    projects,
+    currentTaskId: task?.id,
+    preferredProjectId: form.watch('projectId') || task?.project_id || undefined,
+    query: blockedByQuery,
+  });
+  const sameProjectCandidates = blockedByQuery ? [] : blockingCandidates.filter(candidate => candidate.isSameProject);
+  const otherCandidates = blockedByQuery ? blockingCandidates : blockingCandidates.filter(candidate => !candidate.isSameProject);
+
+  const handleBlockedByOpenChange = (open: boolean) => {
+    setBlockedByOpen(open);
+    if (!open) setBlockedBySearch('');
+  };
+
+  const selectBlockingTask = (taskId: string | undefined) => {
+    form.setValue('blockedBy', taskId, { shouldDirty: true });
+    handleBlockedByOpenChange(false);
+  };
+
+  const renderBlockingOption = (candidate: BlockingCandidate) => (
+    <CommandItem
+      key={candidate.task.id}
+      value={`task-${candidate.task.id}`}
+      onSelect={() => selectBlockingTask(candidate.task.id)}
+    >
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{candidate.task.content}</span>
+        <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+          {candidate.projectPath ? (
+            <>
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: candidate.projectColor || '#6b7280' }}
+              />
+              <span className="truncate">{candidate.projectPath}</span>
+            </>
+          ) : (
+            <span>Inbox</span>
+          )}
+          {candidate.parentTitle && (
+            <span className="truncate">· subtask of {candidate.parentTitle}</span>
+          )}
+          {candidate.task.due_date && (
+            <span className="shrink-0">· due {new Date(candidate.task.due_date).toLocaleDateString()}</span>
+          )}
+        </span>
+      </div>
+      <Check
+        className={cn(
+          'ml-2 h-4 w-4 shrink-0',
+          form.watch('blockedBy') === candidate.task.id ? 'opacity-100' : 'opacity-0'
+        )}
+      />
+    </CommandItem>
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose} modal={false}>
@@ -627,7 +689,7 @@ export default function EditTaskDialog({
 
                 <div className="space-y-2">
                   <Label htmlFor="blockedBy">Blocked By</Label>
-                  <Popover open={blockedByOpen} onOpenChange={setBlockedByOpen}>
+                  <Popover open={blockedByOpen} onOpenChange={handleBlockedByOpenChange}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -636,64 +698,62 @@ export default function EditTaskDialog({
                         className="w-full justify-between"
                         disabled={isLoading}
                       >
-                        {form.watch('blockedBy') ? 
-                          tasks.find(t => t.id === form.watch('blockedBy'))?.content || 'Select a blocking task...' :
-                          'Select a blocking task...'
-                        }
+                        <span className="truncate">
+                          {form.watch('blockedBy')
+                            ? tasks.find(t => t.id === form.watch('blockedBy'))?.content || 'Select a blocking task...'
+                            : 'Select a blocking task...'}
+                        </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search tasks..." className="h-9" />
+                    <PopoverContent className="w-[400px] max-w-[calc(100vw-2rem)] p-0">
+                      {/* Filtering is done by getBlockingCandidates (title, project and parent task) */}
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          placeholder="Search by task or project..."
+                          className="h-9"
+                          value={blockedBySearch}
+                          onValueChange={setBlockedBySearch}
+                        />
                         <CommandList>
-                          <CommandEmpty>No tasks found.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandItem
-                              value="not blocked"
-                              onSelect={() => {
-                                form.setValue('blockedBy', undefined);
-                                setBlockedByOpen(false);
-                              }}
+                          {!blockedByQuery && (
+                            <CommandGroup>
+                              <CommandItem value="not-blocked" onSelect={() => selectBlockingTask(undefined)}>
+                                Not blocked
+                                <Check
+                                  className={cn(
+                                    'ml-auto h-4 w-4',
+                                    !form.watch('blockedBy') ? 'opacity-100' : 'opacity-0'
+                                  )}
+                                />
+                              </CommandItem>
+                            </CommandGroup>
+                          )}
+                          {blockingCandidates.length === 0 && (
+                            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                              {blockedByQuery
+                                ? `No open tasks match "${blockedByQuery}".`
+                                : 'There are no other open tasks that could block this one.'}
+                            </div>
+                          )}
+                          {sameProjectCandidates.length > 0 && (
+                            <CommandGroup heading="Same project">
+                              {sameProjectCandidates.map(renderBlockingOption)}
+                            </CommandGroup>
+                          )}
+                          {otherCandidates.length > 0 && (
+                            <CommandGroup
+                              heading={
+                                blockedByQuery
+                                  ? `Results (${otherCandidates.length})`
+                                  : sameProjectCandidates.length > 0
+                                    ? 'Other tasks'
+                                    : 'Open tasks'
+                              }
                             >
-                              Not blocked
-                              <Check
-                                className={cn(
-                                  "ml-auto h-4 w-4",
-                                  !form.watch('blockedBy') ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                            </CommandItem>
-                            {tasks
-                              .filter(t => t.id !== task?.id && !t.completed) // Don't show current task or completed tasks
-                              .sort((a, b) => a.content.localeCompare(b.content))
-                              .map(blockingTask => (
-                                <CommandItem
-                                  key={blockingTask.id}
-                                  value={blockingTask.content}
-                                  onSelect={() => {
-                                    form.setValue('blockedBy', blockingTask.id);
-                                    setBlockedByOpen(false);
-                                  }}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="truncate max-w-64">{blockingTask.content}</span>
-                                    {blockingTask.project_id && (
-                                      <span className="text-xs text-muted-foreground">
-                                        ({projects.find(p => p.id === blockingTask.project_id)?.name || 'Unknown'})
-                                      </span>
-                                    )}
-                                  </div>
-                                  <Check
-                                    className={cn(
-                                      "ml-auto h-4 w-4",
-                                      form.watch('blockedBy') === blockingTask.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                </CommandItem>
-                              ))
-                            }
-                          </CommandGroup>
+                              {otherCandidates.map(renderBlockingOption)}
+                            </CommandGroup>
+                          )}
                         </CommandList>
                       </Command>
                     </PopoverContent>

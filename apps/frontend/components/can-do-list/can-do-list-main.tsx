@@ -736,6 +736,7 @@ export default function CanDoListMain({
                             parent_id: p.parent_id,
                           }))}
                           tasks={tasks}
+                          preferredProjectId={selectedProjectId}
                         />
                         {isMyDaySelected && onApplyAutoplan ? (
                           <div className="mb-4 flex justify-end">
@@ -1098,6 +1099,7 @@ export default function CanDoListMain({
                             parent_id: p.parent_id,
                           }))}
                           tasks={tasks}
+                          preferredProjectId={selectedProjectId}
                         />
                         {isMyDaySelected && onApplyAutoplan ? (
                           <div className="mb-4 flex justify-end">
