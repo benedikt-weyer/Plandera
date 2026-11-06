@@ -126,6 +126,19 @@ export interface CanDoItemDecrypted {
   blocked_by?: string;
   my_day?: boolean;
   parent_task_id?: string; // For subtasks - references parent task ID
+  // Execution constraints (all optional; absent/empty = no restriction)
+  allowed_from_date?: string; // "YYYY-MM-DD" - first day on which the task can be done
+  allowed_weekdays?: number[]; // 0 = Sunday ... 6 = Saturday (JS Date#getDay)
+  allowed_time_start?: string; // "HH:mm" - earliest time of day the task can be done
+  allowed_time_end?: string; // "HH:mm" - latest time of day the task can be done
+}
+
+/** Form-level grouping of a task's execution constraints. Empty array / empty string = unrestricted. */
+export interface TaskExecutionConstraints {
+  fromDate: string;
+  weekdays: number[];
+  timeStart: string;
+  timeEnd: string;
 }
 
 
@@ -165,6 +178,10 @@ export interface CreateCanDoItemDecryptedRequest {
   blocked_by?: string;
   my_day?: boolean;
   parent_task_id?: string; // For subtasks
+  allowed_from_date?: string;
+  allowed_weekdays?: number[];
+  allowed_time_start?: string;
+  allowed_time_end?: string;
 }
 
 export interface UpdateCanDoItemDecryptedRequest {
@@ -182,6 +199,10 @@ export interface UpdateCanDoItemDecryptedRequest {
   blocked_by?: string;
   my_day?: boolean;
   parent_task_id?: string; // For subtasks
+  allowed_from_date?: string;
+  allowed_weekdays?: number[];
+  allowed_time_start?: string;
+  allowed_time_end?: string;
 }
 
 // Project types

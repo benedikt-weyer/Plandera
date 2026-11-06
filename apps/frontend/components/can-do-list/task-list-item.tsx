@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CanDoItemDecrypted, ProjectDecrypted } from "@/utils/api/types";
+import { CanDoItemDecrypted, ProjectDecrypted, TaskExecutionConstraints } from "@/utils/api/types";
 import { useState, useEffect, useRef } from "react";
 import {
   Edit,
@@ -74,6 +74,7 @@ interface TaskListItemProps {
     myDay?: boolean,
     parentTaskId?: string,
     description?: string,
+    executionConstraints?: TaskExecutionConstraints,
   ) => Promise<void>;
   readonly onToggleMyDay?: (id: string) => Promise<void>;
   readonly onScheduleTask?: (taskId: string) => Promise<void>;
@@ -212,6 +213,7 @@ export default function TaskListItem({
     myDay?: boolean,
     parentTaskId?: string,
     description?: string,
+    executionConstraints?: TaskExecutionConstraints,
   ) => {
     setIsUpdating(true);
     try {
@@ -227,6 +229,7 @@ export default function TaskListItem({
         myDay,
         parentTaskId,
         description,
+        executionConstraints,
       );
     } finally {
       setIsUpdating(false);

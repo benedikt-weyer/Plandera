@@ -91,6 +91,10 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       blocked_by?: string;
       my_day?: boolean;
       parent_task_id?: string;
+      allowed_from_date?: string;
+      allowed_weekdays?: number[];
+      allowed_time_start?: string;
+      allowed_time_end?: string;
     }>(encrypted);
 
     return {
@@ -222,6 +226,10 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
         blocked_by: request.blocked_by,
         my_day: request.my_day ?? false,
         parent_task_id: request.parent_task_id,
+        allowed_from_date: request.allowed_from_date,
+        allowed_weekdays: request.allowed_weekdays,
+        allowed_time_start: request.allowed_time_start,
+        allowed_time_end: request.allowed_time_end,
       });
 
       const encryptedRequest: CreateCanDoItemRequest = {
@@ -245,7 +253,9 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
         'due_date' in request || 'impact' in request ||
         'urgency' in request || 'tags' in request ||
         'duration_minutes' in request || 'blocked_by' in request ||
-        'my_day' in request || 'parent_task_id' in request;
+        'my_day' in request || 'parent_task_id' in request ||
+        'allowed_from_date' in request || 'allowed_weekdays' in request || 'allowed_time_start' in request ||
+        'allowed_time_end' in request;
 
       if (hasEncryptedFieldUpdate) {
         const currentResponse = await this.backend.canDoList.getById(request.id);
@@ -266,6 +276,10 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
           blocked_by: 'blocked_by' in request ? request.blocked_by : currentData.blocked_by,
           my_day: 'my_day' in request ? request.my_day : currentData.my_day,
           parent_task_id: 'parent_task_id' in request ? request.parent_task_id : currentData.parent_task_id,
+          allowed_from_date: 'allowed_from_date' in request ? request.allowed_from_date : currentData.allowed_from_date,
+          allowed_weekdays: 'allowed_weekdays' in request ? request.allowed_weekdays : currentData.allowed_weekdays,
+          allowed_time_start: 'allowed_time_start' in request ? request.allowed_time_start : currentData.allowed_time_start,
+          allowed_time_end: 'allowed_time_end' in request ? request.allowed_time_end : currentData.allowed_time_end,
         });
       }
 

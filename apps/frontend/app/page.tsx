@@ -11,6 +11,7 @@ import {
   CanDoItemDecrypted,
   CountdownDecrypted,
   ProjectDecrypted,
+  TaskExecutionConstraints,
   RealtimeSubscription,
   RealtimeMessage,
 } from '@/utils/api/types';
@@ -267,12 +268,12 @@ function SchedulerPageContent() {
     }
   };
 
-  const handleUpdateTask = async (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string): Promise<boolean> => {
+  const handleUpdateTask = async (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string, executionConstraints?: TaskExecutionConstraints): Promise<boolean> => {
     if (!canDoListPageService) return false;
 
     try {
       const updatedTask = await canDoListPageService.updateTask(
-        id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description
+        id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description, executionConstraints
       );
       setTasks(prev => prev.map(task => task.id === id ? updatedTask : task));
       return true;
@@ -1217,10 +1218,11 @@ function SchedulerPageContent() {
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
-    description?: string
+    description?: string,
+    executionConstraints?: TaskExecutionConstraints
   ): Promise<boolean> => {
     if (content !== undefined) {
-      return await handleUpdateTask(id, content, duration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description);
+      return await handleUpdateTask(id, content, duration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description, executionConstraints);
     }
     return false;
   };
@@ -1245,9 +1247,10 @@ function SchedulerPageContent() {
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
-    description?: string
+    description?: string,
+    executionConstraints?: TaskExecutionConstraints
   ): Promise<void> => {
-    await handleUpdateTask(id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description);
+    await handleUpdateTask(id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description, executionConstraints);
   };
 
   const wrappedLoadTasks = async (): Promise<void> => {

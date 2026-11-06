@@ -1,6 +1,6 @@
 'use client';
 
-import { CanDoItemDecrypted, ProjectDecrypted } from '@/utils/api/types';
+import { CanDoItemDecrypted, ProjectDecrypted, TaskExecutionConstraints } from '@/utils/api/types';
 import { getRecommendedTasks, getRecommendationReason, calculateRecommendationScore } from '@/utils/can-do-list/recommendation-utils';
 import { formatDueDate, getDueDateColorClass } from '@/utils/can-do-list/due-date-utils';
 import { calculatePriority, getUrgencyColorClass, getPriorityDisplayText } from '@/utils/can-do-list/priority-utils';
@@ -19,7 +19,7 @@ interface RecommendedTaskListProps {
   searchQuery?: string;
   onToggleComplete: (id: string, completed: boolean) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
-  onUpdateTask: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string) => Promise<void>;
+  onUpdateTask: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string, executionConstraints?: TaskExecutionConstraints) => Promise<void>;
   onToggleMyDay?: (id: string) => Promise<void>;
   onScheduleTask?: (taskId: string) => Promise<void>;
   isTaskScheduled?: (taskId: string) => boolean;

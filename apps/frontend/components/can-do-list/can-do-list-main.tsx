@@ -30,7 +30,7 @@ import ProjectSidebarDynamic from "./project-bar/project-sidebar-dynamic";
 import ProjectSelectorMobile from "./project-selector-mobile";
 import TaskListItem from "./task-list-item";
 import { TaskAutoplanDialog } from "./task-autoplan-dialog";
-import { CanDoItemDecrypted, ProjectDecrypted } from "@/utils/api/types";
+import { CanDoItemDecrypted, ProjectDecrypted, TaskExecutionConstraints } from "@/utils/api/types";
 import { TaskAutoplanAssignment } from "@/utils/calendar/task-reservation-utils";
 
 // Define schema for new task validation
@@ -63,7 +63,6 @@ interface CanDoListMainProps {
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
-    description?: string,
   ) => Promise<boolean>;
   handleUpdateTask: (
     id: string,
@@ -77,6 +76,7 @@ interface CanDoListMainProps {
     myDay?: boolean,
     parentTaskId?: string,
     description?: string,
+    executionConstraints?: TaskExecutionConstraints,
   ) => Promise<boolean>;
   handleToggleComplete: (id: string, completed: boolean) => Promise<boolean>;
   handleDeleteTask: (id: string) => Promise<boolean>;
@@ -603,6 +603,7 @@ export default function CanDoListMain({
     myDay?: boolean,
     parentTaskId?: string,
     description?: string,
+    executionConstraints?: TaskExecutionConstraints,
   ) => {
     await handleUpdateTask(
       id,
@@ -616,6 +617,7 @@ export default function CanDoListMain({
       myDay,
       parentTaskId,
       description,
+      executionConstraints,
     );
   };
 

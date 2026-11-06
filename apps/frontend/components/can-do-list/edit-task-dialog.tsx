@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
-import { CanDoItemDecrypted, ProjectDecrypted } from '@/utils/api/types';
+import { CanDoItemDecrypted, ProjectDecrypted, TaskExecutionConstraints } from '@/utils/api/types';
+import { useWeekStartDay } from '@/stores/settings-store';
 import { DEFAULT_PROJECT_NAME } from '@/utils/can-do-list/can-do-list-types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Check, ChevronsUpDown, Link2, Trash2 } from 'lucide-react';
@@ -105,7 +107,21 @@ const editTaskSchema = z.object({
   dueDate: z.string().optional(),
   blockedBy: z.string().optional(),
   myDay: z.boolean().optional(),
-  parentTaskId: z.string().optional()
+  parentTaskId: z.string().optional(),
+  // Execution constraints (all optional)
+  fromDate: z.string().optional(),
+  weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+  timeStart: z.string().optional(),
+  timeEnd: z.string().optional(),
+}).superRefine((values, ctx) => {
+  // A time period needs both ends, and the end has to come after the start.
+  if (values.timeStart && !values.timeEnd) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['timeEnd'], message: 'Set an end time as well' });
+  } else if (!values.timeStart && values.timeEnd) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['timeStart'], message: 'Set a start time as well' });
+  } else if (values.timeStart && values.timeEnd && values.timeEnd <= values.timeStart) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['timeEnd'], message: 'End time must be after the start time' });
+  }
 });
 
 type EditTaskFormValues = z.infer<typeof editTaskSchema>;
@@ -114,7 +130,7 @@ interface EditTaskDialogProps {
   readonly task: CanDoItemDecrypted | null;
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly onSave: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string) => Promise<void>;
+  readonly onSave: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string, executionConstraints?: TaskExecutionConstraints) => Promise<void>;
   readonly isLoading?: boolean;
   readonly projects?: ProjectDecrypted[];
   readonly tasks?: CanDoItemDecrypted[];
@@ -138,6 +154,12 @@ export default function EditTaskDialog({
   const { t } = useTranslation();
   const [blockedByOpen, setBlockedByOpen] = useState(false);
   const [parentTaskOpen, setParentTaskOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'constraints'>('general');
+  const weekStartsOn = useWeekStartDay();
+  // Weekday values are 0 = Sunday ... 6 = Saturday; order them by the user's week start.
+  const weekdayOrder = Array.from({ length: 7 }, (_, i) => (i + weekStartsOn) % 7);
+  const weekdayLabel = (day: number) =>
+    new Date(2024, 0, 7 + day).toLocaleDateString(undefined, { weekday: 'short' }); // 2024-01-07 is a Sunday
   
   // Helper function to calculate nesting depth
   const getTaskNestingDepth = (taskId: string, tasks: CanDoItemDecrypted[]): number => {
@@ -179,7 +201,11 @@ export default function EditTaskDialog({
       estimatedDuration: '',
       blockedBy: '',
       myDay: false,
-      parentTaskId: ''
+      parentTaskId: '',
+      fromDate: '',
+      weekdays: [],
+      timeStart: '',
+      timeEnd: ''
     }
   });
 
@@ -196,8 +222,13 @@ export default function EditTaskDialog({
         dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '',
         blockedBy: task.blocked_by ?? '',
         myDay: task.my_day ?? false,
-        parentTaskId: task.parent_task_id ?? ''
+        parentTaskId: task.parent_task_id ?? '',
+        fromDate: task.allowed_from_date ?? '',
+        weekdays: task.allowed_weekdays ?? [],
+        timeStart: task.allowed_time_start ?? '',
+        timeEnd: task.allowed_time_end ?? ''
       });
+      setActiveTab('general');
     }
   }, [task, isOpen, form]);
 
@@ -211,6 +242,14 @@ export default function EditTaskDialog({
     const projectId = values.projectId || undefined; // Convert empty string to undefined
     const parentTaskId = values.parentTaskId || undefined; // Convert empty string to undefined
     const description = (values.description ?? '').trim();
+    const weekdays = [...(values.weekdays ?? [])].sort((a, b) => a - b);
+    const executionConstraints: TaskExecutionConstraints = {
+      fromDate: values.fromDate ?? '',
+      weekdays,
+      timeStart: values.timeStart ?? '',
+      timeEnd: values.timeEnd ?? '',
+    };
+    const originalWeekdays = [...(task.allowed_weekdays ?? [])].sort((a, b) => a - b);
     
     // Safely handle content comparison with null/undefined checks
     const currentContent = (values.content || '').trim();
@@ -219,6 +258,11 @@ export default function EditTaskDialog({
     if (
       currentContent === originalContent &&
       description === (task.description ?? '').trim() &&
+      executionConstraints.fromDate === (task.allowed_from_date ?? '') &&
+      executionConstraints.timeStart === (task.allowed_time_start ?? '') &&
+      executionConstraints.timeEnd === (task.allowed_time_end ?? '') &&
+      weekdays.length === originalWeekdays.length &&
+      weekdays.every((day, i) => day === originalWeekdays[i]) &&
       duration === task.duration_minutes &&
       projectId === task.project_id &&
       impact === task.impact &&
@@ -231,7 +275,7 @@ export default function EditTaskDialog({
       onClose();
       return;
     }
-    await onSave(task.id, currentContent, duration, projectId, impact, urgency, dueDate, blockedBy, values.myDay, parentTaskId, description);
+    await onSave(task.id, currentContent, duration, projectId, impact, urgency, dueDate, blockedBy, values.myDay, parentTaskId, description, executionConstraints);
     onClose();
   };
 
@@ -295,7 +339,23 @@ export default function EditTaskDialog({
           ) : null}
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            // Make sure the tab containing the invalid field is visible.
+            if (errors.timeStart || errors.timeEnd || errors.fromDate || errors.weekdays) {
+              setActiveTab('constraints');
+            } else {
+              setActiveTab('general');
+            }
+          })}
+          className="space-y-4"
+        >
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'general' | 'constraints')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="constraints">Execution constraints</TabsTrigger>
+            </TabsList>
+            <TabsContent value="general" className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="content">Content</Label>
             <Input
@@ -638,6 +698,104 @@ export default function EditTaskDialog({
             })()}
           </div>
           
+            </TabsContent>
+
+            <TabsContent value="constraints" className="space-y-5">
+              <p className="text-sm text-muted-foreground">
+                Optionally limit when this task can be done. Leave a setting empty for no restriction.
+              </p>
+
+              <div className="space-y-2">
+                <Label htmlFor="fromDate">Possible from</Label>
+                <DatePicker
+                  value={form.watch('fromDate')}
+                  onChange={(value) => form.setValue('fromDate', value, { shouldDirty: true })}
+                  disabled={isLoading}
+                  placeholder="Any date"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The task can't be started before this date.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Possible on weekdays</Label>
+                <div className="flex flex-wrap gap-2">
+                  {weekdayOrder.map((day) => {
+                    const selected = (form.watch('weekdays') ?? []).includes(day);
+                    return (
+                      <Button
+                        key={day}
+                        type="button"
+                        size="sm"
+                        variant={selected ? 'default' : 'outline'}
+                        aria-pressed={selected}
+                        disabled={isLoading}
+                        onClick={() => {
+                          const current = form.getValues('weekdays') ?? [];
+                          form.setValue(
+                            'weekdays',
+                            selected ? current.filter((d) => d !== day) : [...current, day],
+                            { shouldDirty: true },
+                          );
+                        }}
+                        className="text-xs"
+                      >
+                        {weekdayLabel(day)}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {(form.watch('weekdays') ?? []).length === 0
+                    ? 'No weekday selected: possible on every day.'
+                    : 'The task can only be done on the selected days.'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="timeStart">Possible time period</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="timeStart"
+                    type="time"
+                    disabled={isLoading}
+                    aria-label="Earliest time of day"
+                    {...form.register('timeStart')}
+                  />
+                  <span className="text-sm text-muted-foreground">to</span>
+                  <Input
+                    id="timeEnd"
+                    type="time"
+                    disabled={isLoading}
+                    aria-label="Latest time of day"
+                    {...form.register('timeEnd')}
+                  />
+                  {(form.watch('timeStart') || form.watch('timeEnd')) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={isLoading}
+                      onClick={() => {
+                        form.setValue('timeStart', '', { shouldDirty: true });
+                        form.setValue('timeEnd', '', { shouldDirty: true });
+                        form.clearErrors(['timeStart', 'timeEnd']);
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                {(form.formState.errors.timeStart || form.formState.errors.timeEnd) && (
+                  <p className="text-sm text-destructive">
+                    {form.formState.errors.timeStart?.message ?? form.formState.errors.timeEnd?.message}
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+
           <DialogFooter>
             <Button 
               type="button" 

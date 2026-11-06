@@ -1,6 +1,6 @@
 'use client';
 
-import { CanDoItemDecrypted, ProjectDecrypted, CreateCanDoItemDecryptedRequest, UpdateCanDoItemDecryptedRequest, CreateProjectDecryptedRequest, UpdateProjectDecryptedRequest } from '@/utils/api/types';
+import { CanDoItemDecrypted, ProjectDecrypted, CreateCanDoItemDecryptedRequest, UpdateCanDoItemDecryptedRequest, CreateProjectDecryptedRequest, UpdateProjectDecryptedRequest, TaskExecutionConstraints } from '@/utils/api/types';
 import { TaskService } from '@/services/tasks/task-service';
 import { ProjectService } from '@/services/projects/project-service';
 import { DecryptedBackendInterface } from '@/utils/api/decrypted-backend-interface';
@@ -94,7 +94,8 @@ export class CanDoListPageService {
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
-    description?: string
+    description?: string,
+    executionConstraints?: TaskExecutionConstraints
   ): Promise<CanDoItemDecrypted> {
     try {
       const updateData: UpdateCanDoItemDecryptedRequest = {
@@ -109,6 +110,13 @@ export class CanDoListPageService {
         ...(myDay !== undefined && { my_day: myDay }),
         ...(parentTaskId !== undefined && { parent_task_id: parentTaskId }),
         ...(description !== undefined && { description }),
+        // Always send all four keys together so that clearing a constraint (empty value) is persisted.
+        ...(executionConstraints !== undefined && {
+          allowed_from_date: executionConstraints.fromDate || undefined,
+          allowed_weekdays: executionConstraints.weekdays.length > 0 ? executionConstraints.weekdays : undefined,
+          allowed_time_start: executionConstraints.timeStart || undefined,
+          allowed_time_end: executionConstraints.timeEnd || undefined,
+        }),
       };
 
       return await this.taskService.updateTask(updateData);
