@@ -22,9 +22,12 @@ interface AddTaskFormProps {
     urgency?: number;
     dueDate?: Date;
     myDay?: boolean;
+    blockedBy?: string;
   }) => Promise<void>;
   readonly isLoading: boolean;
   readonly projects?: { id: string; name: string }[];
+  /** Tasks that can be picked as the blocking task with #block */
+  readonly tasks?: { id: string; content: string; completed?: boolean; project_id?: string }[];
 }
 
 export default function AddTaskForm({
@@ -32,6 +35,7 @@ export default function AddTaskForm({
   onSubmit,
   isLoading,
   projects = [],
+  tasks = [],
 }: AddTaskFormProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const { t } = useTranslation();
@@ -48,6 +52,7 @@ export default function AddTaskForm({
       urgency: taskData.urgency,
       dueDate: taskData.dueDate,
       myDay: taskData.myDay,
+      blockedBy: taskData.blockedBy,
     });
 
     // Clear tags after successful submission
@@ -71,6 +76,7 @@ export default function AddTaskForm({
                     tags={tags}
                     onTagsChange={setTags}
                     projects={projects}
+                    tasks={tasks}
                     autoComplete="off"
                     autoCapitalize="off"
                     autoCorrect="off"

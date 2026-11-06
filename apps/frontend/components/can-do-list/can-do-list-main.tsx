@@ -540,6 +540,7 @@ export default function CanDoListMain({
     dueDate?: Date;
     myDay?: boolean;
     parentTaskId?: string;
+    blockedBy?: string;
   }) => {
     // If tags provided values, use them; otherwise parse from content as fallback
     let content = values.content;
@@ -581,7 +582,7 @@ export default function CanDoListMain({
       impact,
       urgency,
       dueDate,
-      undefined, // blockedBy
+      values.blockedBy, // blockedBy (from #block tag)
       myDay, // myDay
       values.parentTaskId, // parentTaskId
     );
@@ -734,6 +735,7 @@ export default function CanDoListMain({
                             color: p.color,
                             parent_id: p.parent_id,
                           }))}
+                          tasks={tasks}
                         />
                         {isMyDaySelected && onApplyAutoplan ? (
                           <div className="mb-4 flex justify-end">
@@ -1095,6 +1097,7 @@ export default function CanDoListMain({
                             color: p.color,
                             parent_id: p.parent_id,
                           }))}
+                          tasks={tasks}
                         />
                         {isMyDaySelected && onApplyAutoplan ? (
                           <div className="mb-4 flex justify-end">

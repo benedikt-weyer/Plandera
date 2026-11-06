@@ -53,6 +53,7 @@ export interface ExtractedTaskData {
   urgency?: number;
   dueDate?: Date;
   myDay?: boolean;
+  blockedBy?: string; // id of the task that has to be finished first
 }
 
 export function extractTaskDataFromTags(content: string, tags: Tag[]): ExtractedTaskData {
@@ -79,6 +80,9 @@ export function extractTaskDataFromTags(content: string, tags: Tag[]): Extracted
         break;
       case 'due-date':
         result.dueDate = tag.dueDate;
+        break;
+      case 'blocked-by':
+        result.blockedBy = tag.blockedByTaskId;
         break;
       case 'custom':
         // Custom tags get added back to content

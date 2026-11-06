@@ -4,7 +4,7 @@ import { useState, useRef, forwardRef, useImperativeHandle, useEffect, useMemo }
 import { createPortal } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { X, Clock, Info, Zap, Calendar, Folder, Sun } from 'lucide-react';
+import { X, Clock, Info, Zap, Calendar, Folder, Sun, Shield } from 'lucide-react';
 import { cn } from '@/lib/shadcn-utils';
 import { isValidHashtag, getLastWordBeforeCursor } from '@/utils/can-do-list/hashtag-utils';
 
@@ -19,7 +19,9 @@ export interface Tag {
   projectName?: string; // for project tags
   projectColor?: string; // for project tags
   myDay?: boolean; // for my day tags
-  type: 'duration' | 'priority' | 'due-date' | 'project' | 'my-day' | 'custom'; // extensible for different tag types
+  blockedByTaskId?: string; // for blocked-by tags: the task that has to be finished first
+  blockedByTaskTitle?: string; // for blocked-by tags
+  type: 'duration' | 'priority' | 'due-date' | 'project' | 'my-day' | 'blocked-by' | 'custom'; // extensible for different tag types
 }
 
 interface TaggedInputProps {
@@ -33,6 +35,7 @@ interface TaggedInputProps {
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   availableTagSuggestions?: TagSuggestion[];
   projects?: { id: string; name: string; color?: string; parent_id?: string; }[]; // for project suggestions
+  tasks?: { id: string; content: string; completed?: boolean; project_id?: string; }[]; // for blocked-by (#block) suggestions
   autoComplete?: string;
   autoCorrect?: 'on' | 'off';
   autoCapitalize?: 'off' | 'none' | 'on' | 'sentences' | 'words' | 'characters';
@@ -43,7 +46,7 @@ export interface TagSuggestion {
   id: string;
   text: string;
   description?: string;
-  type: 'duration' | 'priority' | 'due-date' | 'project' | 'my-day' | 'custom';
+  type: 'duration' | 'priority' | 'due-date' | 'project' | 'my-day' | 'blocked-by' | 'custom';
   duration?: number; // for duration suggestions
   impact?: number; // for priority suggestions
   urgency?: number; // for priority suggestions
@@ -52,7 +55,14 @@ export interface TagSuggestion {
   projectName?: string; // for project suggestions
   projectColor?: string; // for project suggestions
   myDay?: boolean; // for my day suggestions
+  blockedByTaskId?: string; // for blocked-by suggestions
+  blockedByTaskTitle?: string; // for blocked-by suggestions
 }
+
+// Matches the hashtag that starts a blocking task search: #block, #blocked or #blockedby
+const BLOCKED_BY_TRIGGER = /^#block(?:ed(?:by)?)?/i;
+// Maximum number of tasks offered at once for #block
+const MAX_BLOCKED_BY_SUGGESTIONS = 20;
 
 export interface TaggedInputRef {
   focus: () => void;
@@ -75,6 +85,7 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
     onKeyDown: externalOnKeyDown,
     availableTagSuggestions = [],
     projects = [],
+    tasks: availableTasks = [],
     ...props 
   }, ref) => {
     const [internalTags, setInternalTags] = useState<Tag[]>([]);
@@ -101,6 +112,7 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
       { id: 'help-priority', text: '#p...', description: 'Priority tags - #p5, #i7, #u3, #i7u3', type: 'custom' },
       { id: 'help-due-date', text: '#due...', description: 'Due date tags - #due2024-12-25, #duetoday, #due4d, #duenextmonday', type: 'custom' },
       { id: 'help-project', text: '#pro', description: 'Project selection - fuzzy search your projects', type: 'custom' },
+      { id: 'help-blocked-by', text: '#block', description: 'Blocked by a task - #block + part of its title', type: 'custom' },
       { id: 'help-my-day', text: '#day', description: 'Add to My Day - #day', type: 'custom' },
       { id: 'help-custom', text: '#...', description: 'Custom tags - #urgent, #meeting, #personal', type: 'custom' },
       
@@ -183,6 +195,25 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
         };
       });
     }, [projects]);
+
+    // Open tasks that can block a new task. Kept out of the general suggestion list (there can be
+    // many tasks); they are only offered after typing #block.
+    const blockedBySuggestions: TagSuggestion[] = useMemo(() => {
+      const projectsMap = new Map(projects.map(p => [p.id, p]));
+
+      return availableTasks
+        .filter(task => !task.completed)
+        .map(task => ({
+          id: `blocked-by-${task.id}`,
+          text: `#block ${task.content}`,
+          description: task.project_id ? projectsMap.get(task.project_id)?.name : undefined,
+          type: 'blocked-by' as const,
+          blockedByTaskId: task.id,
+          blockedByTaskTitle: task.content,
+        }));
+    }, [availableTasks, projects]);
+    const blockedBySuggestionsRef = useRef<TagSuggestion[]>([]);
+    blockedBySuggestionsRef.current = blockedBySuggestions;
 
     // Update allSuggestionsRef when needed to avoid infinite re-renders
     // Always ensure the ref has the current suggestions
@@ -278,6 +309,25 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
         }
       }
       
+      // Special handling for #block - search the open tasks that can block this one
+      const blockedByTrigger = BLOCKED_BY_TRIGGER.exec(lastWord);
+      if (blockedByTrigger) {
+        const searchTerm = lastWord.slice(blockedByTrigger[0].length).trim().toLowerCase();
+        const taskSugs = blockedBySuggestionsRef.current
+          .filter(suggestion => !searchTerm || suggestion.blockedByTaskTitle?.toLowerCase().includes(searchTerm))
+          .slice(0, MAX_BLOCKED_BY_SUGGESTIONS);
+
+        if (taskSugs.length > 0) {
+          updateDropdownPosition();
+          setShowDropdown(true);
+          setFilteredSuggestions(taskSugs);
+          setSelectedSuggestionIndex(-1);
+        } else {
+          setShowDropdown(false);
+        }
+        return;
+      }
+
       // Filter suggestions based on what the user typed
       const filtered = currentSuggestions.filter(suggestion => 
         suggestion.text.toLowerCase().startsWith(lastWord.toLowerCase())
@@ -334,6 +384,8 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
       const newTag: Tag = {
         id: Date.now().toString(),
         text: suggestion.type === 'project' ? `#pro ${suggestion.projectName}` : suggestion.text,
+        blockedByTaskId: suggestion.blockedByTaskId,
+        blockedByTaskTitle: suggestion.blockedByTaskTitle,
         duration: suggestion.duration,
         impact: suggestion.impact,
         urgency: suggestion.urgency,
@@ -361,6 +413,10 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
           return [...filteredTags, newTag];
         } else if (suggestion.type === 'my-day') {
           const filteredTags = prev.filter(tag => tag.type !== 'my-day');
+          return [...filteredTags, newTag];
+        } else if (suggestion.type === 'blocked-by') {
+          // A task can only be blocked by one task
+          const filteredTags = prev.filter(tag => tag.type !== 'blocked-by');
           return [...filteredTags, newTag];
         } else {
           return [...prev, newTag];
@@ -976,8 +1032,12 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
                   {!suggestion.id.startsWith('help-') && suggestion.type === 'my-day' && (
                     <Sun className="h-3 w-3 text-amber-500" />
                   )}
+                  {!suggestion.id.startsWith('help-') && suggestion.type === 'blocked-by' && (
+                    <Shield className="h-3 w-3 text-red-500" />
+                  )}
                   <span className={cn(
                     "font-mono text-sm",
+                    suggestion.type === 'blocked-by' && "truncate max-w-[16rem]",
                     suggestion.id.startsWith('help-') && "text-muted-foreground font-normal"
                   )}>
                     {suggestion.text}
@@ -1024,6 +1084,8 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
                   if (diffDays <= 7) return 'bg-blue-100 text-blue-700'; // Due this week
                   
                   return 'bg-gray-100 text-gray-700'; // Due later
+                } else if (tag.type === 'blocked-by') {
+                  return 'bg-red-100 text-red-700';
                 }
                 return 'bg-secondary text-secondary-foreground';
               };
@@ -1050,6 +1112,8 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
                   return tag.projectName || tag.text;
                 } else if (tag.type === 'my-day') {
                   return 'My Day';
+                } else if (tag.type === 'blocked-by') {
+                  return `Blocked by: ${tag.blockedByTaskTitle ?? tag.text}`;
                 }
                 return tag.text;
               };
@@ -1075,7 +1139,10 @@ export const TaggedInput = forwardRef<TaggedInputRef, TaggedInputProps>(
                     </div>
                   )}
                   {tag.type === 'my-day' && <Sun className="h-3 w-3 text-amber-500" />}
-                  {getTagDisplayText()}
+                  {tag.type === 'blocked-by' && <Shield className="h-3 w-3 shrink-0" />}
+                  <span className={cn(tag.type === 'blocked-by' && 'max-w-[16rem] truncate')}>
+                    {getTagDisplayText()}
+                  </span>
                   <button
                     type="button"
                     onClick={() => removeTag(tag.id)}
