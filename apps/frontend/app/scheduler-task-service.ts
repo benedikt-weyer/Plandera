@@ -257,54 +257,12 @@ export class CanDoListPageService {
   }
 
   /**
-   * Delete a project subtree and handle its tasks.
-   * Projects are deleted leaf-first by repeatedly calling the single-project delete method.
+   * Delete a project together with all its sub-projects and every task in that project tree.
+   * The server does this in a single recursive delete (all or nothing).
    */
   async deleteProjectWithTasks(projectId: string): Promise<void> {
     try {
-      // Get all projects and tasks
-      const [allProjects, allTasks] = await Promise.all([
-        this.projectService.getProjects(),
-        this.taskService.getTasks()
-      ]);
-      
-      const projectToDelete = allProjects.find(proj => proj.id === projectId);
-      
-      if (!projectToDelete) {
-        throw new Error('Project not found');
-      }
-
-      const childProjectsByParent = new Map<string, ProjectDecrypted[]>();
-      for (const project of allProjects) {
-        if (!project.parent_id) continue;
-        const siblings = childProjectsByParent.get(project.parent_id) ?? [];
-        siblings.push(project);
-        childProjectsByParent.set(project.parent_id, siblings);
-      }
-
-      const deletionOrder: ProjectDecrypted[] = [];
-      const collectDeletionOrder = (currentProjectId: string) => {
-        const childProjects = childProjectsByParent.get(currentProjectId) ?? [];
-        for (const childProject of childProjects) {
-          collectDeletionOrder(childProject.id);
-        }
-
-        const currentProject = allProjects.find(project => project.id === currentProjectId);
-        if (currentProject) {
-          deletionOrder.push(currentProject);
-        }
-      };
-
-      collectDeletionOrder(projectId);
-
-      for (const project of deletionOrder) {
-        const tasksInProject = allTasks.filter(task => task.project_id === project.id);
-        for (const task of tasksInProject) {
-          await this.taskService.deleteTask(task.id);
-        }
-
-        await this.projectService.deleteProject(project.id);
-      }
+      await this.projectService.deleteProject(projectId, { recursive: true });
     } catch (error) {
       console.error(`Failed to delete project with tasks ${projectId}:`, error);
       throw new Error('Failed to delete project tree and its tasks');

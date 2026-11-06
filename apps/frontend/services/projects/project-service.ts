@@ -75,11 +75,15 @@ export class ProjectService {
   }
 
   /**
-   * Delete a project
+   * Delete a project.
+   * With `recursive`, its sub-projects and all tasks in the project tree are deleted as well.
    */
-  async deleteProject(id: string): Promise<void> {
+  async deleteProject(id: string, options?: { recursive?: boolean }): Promise<void> {
     try {
-      await this.backend.projects.delete(id);
+      const { error } = await this.backend.projects.delete(id, options);
+      if (error) {
+        throw new Error(error);
+      }
     } catch (error) {
       console.error(`Failed to delete project ${id}:`, error);
       throw new Error('Failed to delete project');

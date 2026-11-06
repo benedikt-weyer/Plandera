@@ -379,8 +379,8 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       };
     },
 
-    delete: async (id: string): Promise<{ error: string | null }> => {
-      return this.backend.projects.delete(id);
+    delete: async (id: string, options?: { recursive?: boolean }): Promise<{ error: string | null }> => {
+      return this.backend.projects.delete(id, options);
     },
 
     subscribe: (callback: (payload: RealtimeMessage<ProjectDecrypted>) => void): RealtimeSubscription => {

@@ -875,9 +875,10 @@ class RustBackendImpl implements BackendInterface {
       });
     },
 
-    delete: async (id: string): Promise<{ error: string | null }> => {
+    delete: async (id: string, options?: { recursive?: boolean }): Promise<{ error: string | null }> => {
       try {
-        await this.makeRequest(`/api/projects/${id}`, {
+        const query = options?.recursive ? '?recursive=true' : '';
+        await this.makeRequest(`/api/projects/${id}${query}`, {
           method: 'DELETE',
         });
         return { error: null };

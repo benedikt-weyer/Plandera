@@ -85,9 +85,11 @@ export interface DecryptedBackendInterface {
     update(request: UpdateProjectDecryptedRequest): Promise<ApiResponse<ProjectDecrypted>>;
 
     /**
-     * Delete a project
+     * Delete a project.
+     * With `recursive`, all its sub-projects and every task in the project tree are deleted too
+     * (in one step on the server). Without it, tasks of the project are kept and move to the inbox.
      */
-    delete(id: string): Promise<{ error: string | null }>;
+    delete(id: string, options?: { recursive?: boolean }): Promise<{ error: string | null }>;
 
     /**
      * Subscribe to real-time changes for projects (decrypted)

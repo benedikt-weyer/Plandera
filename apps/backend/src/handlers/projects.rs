@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     auth::AuthenticatedUser,
     deks,
-    entities::{prelude::*, projects},
+    entities::{can_do_list, prelude::*, projects},
     errors::Result,
     handlers::dek_support,
     models::{
@@ -25,6 +25,13 @@ use crate::{
 pub struct ProjectQuery {
     pub parent_id: Option<Uuid>,
     pub all: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteProjectQuery {
+    /// Also delete every task in the project and in its sub-projects. Without it the tasks are
+    /// kept and just lose their project (they end up in the inbox).
+    pub recursive: Option<bool>,
 }
 
 pub async fn list_projects(
@@ -265,46 +272,221 @@ pub async fn update_project(
     )))
 }
 
+/// The project and all of its descendants out of `(id, parent_id)` links, the project itself first.
+/// Projects whose ancestor chain does not lead to `root_id` are not included.
+fn subtree_from_links(links: &[(Uuid, Option<Uuid>)], root_id: Uuid) -> Vec<Uuid> {
+    let mut children_by_parent: std::collections::HashMap<Uuid, Vec<Uuid>> =
+        std::collections::HashMap::new();
+    for (id, parent_id) in links {
+        if let Some(parent_id) = parent_id {
+            children_by_parent.entry(*parent_id).or_default().push(*id);
+        }
+    }
+
+    // Breadth-first walk; `seen` guards against cycles in corrupt data.
+    let mut subtree = vec![root_id];
+    let mut seen: std::collections::HashSet<Uuid> = std::collections::HashSet::from([root_id]);
+    let mut next = 0;
+    while next < subtree.len() {
+        let current = subtree[next];
+        next += 1;
+        for child_id in children_by_parent.get(&current).into_iter().flatten() {
+            if seen.insert(*child_id) {
+                subtree.push(*child_id);
+            }
+        }
+    }
+
+    subtree
+}
+
+async fn collect_project_subtree<C>(db: &C, owner_user_id: Uuid, root_id: Uuid) -> Result<Vec<Uuid>>
+where
+    C: ConnectionTrait,
+{
+    let links: Vec<(Uuid, Option<Uuid>)> = Projects::find()
+        .filter(projects::Column::UserId.eq(owner_user_id))
+        .select_only()
+        .column(projects::Column::Id)
+        .column(projects::Column::ParentId)
+        .into_tuple()
+        .all(db)
+        .await
+        .map_err(|e| crate::errors::AppError::Database(e.into()))?;
+
+    Ok(subtree_from_links(&links, root_id))
+}
+
 pub async fn delete_project(
     State(app_state): State<AppState>,
     authenticated_user: AuthenticatedUser,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
+    Query(query): Query<DeleteProjectQuery>,
 ) -> Result<Json<ApiResponse<()>>> {
     let connection_id = extract_connection_id(&headers);
+    let owner_user_id = authenticated_user.owner_user_id;
+    let recursive = query.recursive.unwrap_or(false);
 
-    let result = Projects::delete_by_id(id)
-        .filter(projects::Column::UserId.eq(authenticated_user.owner_user_id))
-        .exec(&app_state.db.connection)
+    let transaction = app_state
+        .db
+        .connection
+        .begin()
         .await
         .map_err(|e| crate::errors::AppError::Database(e.into()))?;
 
+    let project_exists = Projects::find_by_id(id)
+        .filter(projects::Column::UserId.eq(owner_user_id))
+        .one(&transaction)
+        .await
+        .map_err(|e| crate::errors::AppError::Database(e.into()))?
+        .is_some();
+    if !project_exists {
+        return Err(crate::errors::AppError::NotFound(
+            "Project not found".to_string(),
+        ));
+    }
+
+    // Sub-projects are removed by the database (ON DELETE CASCADE) in any case, so their wrapped
+    // keys have to be cleaned up and other clients informed here, not only for the project itself.
+    let project_ids = collect_project_subtree(&transaction, owner_user_id, id).await?;
+
+    // Recursive delete also removes the tasks of the whole subtree. Otherwise the tasks stay and
+    // lose their project (ON DELETE SET NULL).
+    let task_ids: Vec<Uuid> = if recursive {
+        let task_ids: Vec<Uuid> = CanDoList::find()
+            .filter(can_do_list::Column::UserId.eq(owner_user_id))
+            .filter(can_do_list::Column::ProjectId.is_in(project_ids.clone()))
+            .select_only()
+            .column(can_do_list::Column::Id)
+            .into_tuple()
+            .all(&transaction)
+            .await
+            .map_err(|e| crate::errors::AppError::Database(e.into()))?;
+
+        if !task_ids.is_empty() {
+            CanDoList::delete_many()
+                .filter(can_do_list::Column::UserId.eq(owner_user_id))
+                .filter(can_do_list::Column::Id.is_in(task_ids.clone()))
+                .exec(&transaction)
+                .await
+                .map_err(|e| crate::errors::AppError::Database(e.into()))?;
+            deks::delete_wrapped_deks_for_resources(&transaction, task_ids.clone()).await?;
+        }
+        task_ids
+    } else {
+        Vec::new()
+    };
+
+    let result = Projects::delete_many()
+        .filter(projects::Column::UserId.eq(owner_user_id))
+        .filter(projects::Column::Id.is_in(project_ids.clone()))
+        .exec(&transaction)
+        .await
+        .map_err(|e| crate::errors::AppError::Database(e.into()))?;
     if result.rows_affected == 0 {
         return Err(crate::errors::AppError::NotFound(
             "Project not found".to_string(),
         ));
     }
-    deks::delete_wrapped_deks_for_resource(&app_state.db.connection, id).await?;
+    deks::delete_wrapped_deks_for_resources(&transaction, project_ids.clone()).await?;
+
+    transaction
+        .commit()
+        .await
+        .map_err(|e| crate::errors::AppError::Database(e.into()))?;
 
     tracing::info!(
-        "Project deleted, broadcasting websocket message for owner {} (excluding connection {:?})",
-        authenticated_user.owner_user_id,
+        "Project {} deleted (recursive: {}, {} project(s), {} task(s)), broadcasting websocket messages for owner {} (excluding connection {:?})",
+        id,
+        recursive,
+        project_ids.len(),
+        task_ids.len(),
+        owner_user_id,
         connection_id
     );
-    let ws_message = WebSocketMessage {
-        event_type: "DELETE".to_string(),
-        table: "projects".to_string(),
-        user_id: authenticated_user.owner_user_id,
-        record_id: Some(id),
-        data: None,
-    };
-    app_state
-        .ws_state
-        .broadcast_to_user(&authenticated_user.owner_user_id, ws_message, connection_id)
-        .await;
+    for (table, record_id) in task_ids
+        .into_iter()
+        .map(|task_id| ("can_do_list", task_id))
+        .chain(
+            project_ids
+                .into_iter()
+                .map(|project_id| ("projects", project_id)),
+        )
+    {
+        let ws_message = WebSocketMessage {
+            event_type: "DELETE".to_string(),
+            table: table.to_string(),
+            user_id: owner_user_id,
+            record_id: Some(record_id),
+            data: None,
+        };
+        app_state
+            .ws_state
+            .broadcast_to_user(&owner_user_id, ws_message, connection_id)
+            .await;
+    }
 
     Ok(Json(ApiResponse::with_message(
         (),
         "Project deleted successfully",
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::subtree_from_links;
+    use uuid::Uuid;
+
+    fn id() -> Uuid {
+        Uuid::new_v4()
+    }
+
+    #[test]
+    fn subtree_contains_the_project_and_all_descendants_root_first() {
+        let (root, child_a, child_b, grandchild) = (id(), id(), id(), id());
+        let (other_root, other_child) = (id(), id());
+        let links = vec![
+            (other_child, Some(other_root)),
+            (root, None),
+            (grandchild, Some(child_a)),
+            (child_a, Some(root)),
+            (other_root, None),
+            (child_b, Some(root)),
+        ];
+
+        let subtree = subtree_from_links(&links, root);
+
+        assert_eq!(subtree[0], root);
+        assert_eq!(subtree.len(), 4);
+        for expected in [root, child_a, child_b, grandchild] {
+            assert!(subtree.contains(&expected));
+        }
+        assert!(!subtree.contains(&other_root));
+        assert!(!subtree.contains(&other_child));
+    }
+
+    #[test]
+    fn subtree_of_a_leaf_is_just_the_leaf() {
+        let (root, leaf) = (id(), id());
+        let links = vec![(root, None), (leaf, Some(root))];
+        assert_eq!(subtree_from_links(&links, leaf), vec![leaf]);
+    }
+
+    #[test]
+    fn subtree_of_unknown_project_is_just_that_id() {
+        let unknown = id();
+        assert_eq!(subtree_from_links(&[(id(), None)], unknown), vec![unknown]);
+    }
+
+    #[test]
+    fn subtree_terminates_on_cyclic_data() {
+        let (a, b) = (id(), id());
+        let links = vec![(a, Some(b)), (b, Some(a))];
+
+        let subtree = subtree_from_links(&links, a);
+
+        assert_eq!(subtree.len(), 2);
+        assert!(subtree.contains(&a) && subtree.contains(&b));
+    }
 }

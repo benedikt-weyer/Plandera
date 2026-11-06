@@ -126,6 +126,23 @@ where
     Ok(())
 }
 
+pub async fn delete_wrapped_deks_for_resources<C>(db: &C, resource_ids: Vec<Uuid>) -> Result<()>
+where
+    C: ConnectionTrait,
+{
+    if resource_ids.is_empty() {
+        return Ok(());
+    }
+
+    Deks::delete_many()
+        .filter(deks::Column::ResourceId.is_in(resource_ids))
+        .exec(db)
+        .await
+        .map_err(|e| AppError::Database(e.into()))?;
+
+    Ok(())
+}
+
 pub async fn delete_wrapped_deks_for_principal<C>(db: &C, principal_id: Uuid) -> Result<()>
 where
     C: ConnectionTrait,
