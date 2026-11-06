@@ -89,7 +89,7 @@ export default function ProjectSidebarWithDragDrop({
   };
 
   const handleEditProject = async (id: string, name: string, color: string, parentId?: string) => {
-    const success = await onUpdateProject(id, { name, color, parent_id: parentId });
+    const success = await onUpdateProject(id, { name, color, parent_id: parentId ?? null });
     if (success) {
       setEditingProject(null);
     }

@@ -96,7 +96,7 @@ export class ProjectService {
         const updateData: UpdateProjectDecryptedRequest = {
           id: update.id,
           order: update.displayOrder,
-          parent_id: update.parentId
+          parent_id: update.parentId ?? null
         };
         
         await this.backend.projects.update(updateData);

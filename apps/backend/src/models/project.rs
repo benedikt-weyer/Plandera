@@ -16,6 +16,16 @@ pub struct CreateProjectRequest {
     pub is_collapsed: Option<bool>,
 }
 
+/// Distinguishes an absent field (`None`: leave unchanged) from an explicit
+/// JSON `null` (`Some(None)`: clear the value).
+fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct UpdateProjectRequest {
     pub algorithm: Option<String>,
@@ -24,7 +34,8 @@ pub struct UpdateProjectRequest {
     pub version: Option<i32>,
     pub wrapped_deks: Option<Vec<WrappedDekPayload>>,
     pub is_default: Option<bool>,
-    pub parent_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub parent_id: Option<Option<Uuid>>,
     pub display_order: Option<i32>,
     pub is_collapsed: Option<bool>,
 }

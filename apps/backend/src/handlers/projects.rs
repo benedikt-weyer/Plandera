@@ -207,7 +207,7 @@ pub async fn update_project(
         project_active.is_default = Set(is_default);
     }
     if let Some(parent_id) = request.parent_id {
-        project_active.parent_id = Set(Some(parent_id));
+        project_active.parent_id = Set(parent_id);
     }
     if let Some(display_order) = request.display_order {
         project_active.display_order = Set(display_order);

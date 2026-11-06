@@ -225,7 +225,8 @@ export interface CreateProjectRequest {
 
 export interface UpdateProjectRequest {
   id: string;
-  parent_id?: string;
+  /** undefined = leave unchanged, null = move to top level */
+  parent_id?: string | null;
   display_order?: number;
   is_collapsed?: boolean;
   algorithm?: string;
@@ -249,7 +250,8 @@ export interface UpdateProjectDecryptedRequest {
   name?: string;
   description?: string;
   color?: string;
-  parent_id?: string;
+  /** undefined = leave unchanged, null = move to top level */
+  parent_id?: string | null;
   order?: number;
   collapsed?: boolean;
 }
