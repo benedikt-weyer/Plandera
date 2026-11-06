@@ -28,6 +28,9 @@ case "$command_name" in
   start-fe)
     start_frontend
     ;;
+  dev-be)
+    run_backend_foreground
+    ;;
   stop)
     stop_all
     ;;

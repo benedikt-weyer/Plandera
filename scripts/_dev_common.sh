@@ -212,11 +212,26 @@ start_backend() {
   echo "Starting Rust backend server..."
   cd "$PROJECT_DIR/apps/backend"
   : >"$BACKEND_LOG_FILE"
-  nohup cargo watch -x run >"$BACKEND_LOG_FILE" 2>&1 &
+  nohup cargo-watch watch -x run >"$BACKEND_LOG_FILE" 2>&1 &
   echo $! >"$BACKEND_PID_FILE"
   wait_for_backend
   echo "Backend server started with hot reload"
   echo "API available at http://localhost:${BACKEND_PORT:-3001}"
+}
+
+# Foreground variant of start_database + start_backend, for process
+# multiplexers (e.g. `pnpm dev` -> turbo TUI) that need the process attached.
+run_backend_foreground() {
+  start_database
+  ensure_backend_env
+  load_root_env
+
+  echo "Starting Rust backend server (foreground, hot reload)..."
+  cd "$PROJECT_DIR/apps/backend"
+  # Call cargo-watch directly instead of `cargo watch`: cargo looks in
+  # ~/.cargo/bin before $PATH, so a stale `cargo install`ed copy there would
+  # shadow the one provided by the nix dev shell.
+  exec cargo-watch watch -x run
 }
 
 start_frontend() {
@@ -247,7 +262,7 @@ stop_backend() {
     rm -f "$BACKEND_PID_FILE"
   fi
 
-  pkill -f "cargo watch -x run" 2>/dev/null || true
+  pkill -f "cargo-watch watch -x run" 2>/dev/null || true
   pkill -f "cargo run" 2>/dev/null || true
 }
 
@@ -353,6 +368,7 @@ Commands:
   start-db     Start PostgreSQL and pgAdmin
   start-be     Start the Rust backend
   start-fe     Start the Next.js frontend
+  dev-be       Start PostgreSQL, then run the backend in the foreground (used by pnpm dev)
   stop         Stop database, backend, and frontend
   stop-db      Stop PostgreSQL and pgAdmin
   stop-be      Stop the Rust backend

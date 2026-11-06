@@ -1,0 +1,10 @@
+{
+  "name": "backend",
+  "private": true,
+  "description": "Thin pnpm/turbo wrapper so the Rust backend takes part in `pnpm dev`, `pnpm build` and `pnpm test` at the repo root.",
+  "scripts": {
+    "dev": "../../scripts/plandera-dev dev-be",
+    "build": "cargo build --release",
+    "test": "cargo test"
+  }
+}
