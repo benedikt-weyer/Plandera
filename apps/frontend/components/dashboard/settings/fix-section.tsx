@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, CheckCircle, Loader2, RefreshCw, Eye, Play } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, RefreshCw, Eye, Play, Trash2 } from 'lucide-react';
 import { useError } from '@/utils/context/ErrorContext';
 import { getDecryptedBackend } from '@/utils/api/decrypted-backend';
 
@@ -12,7 +12,7 @@ interface FixSectionProps {
 }
 
 interface FixResult {
-  type: 'calendars' | 'calendar_events';
+  type: 'calendars' | 'calendar_events' | 'tasks';
   processed: number;
   fixed: number;
   errors: number;
@@ -20,13 +20,13 @@ interface FixResult {
 
 interface PreviewItem {
   id: string;
-  type: 'calendar' | 'calendar_event';
+  type: 'calendar' | 'calendar_event' | 'task';
   name: string;
   changes: Array<{
     field: string;
     from: any;
     to: any;
-    action: 'normalize' | 'add_missing' | 'fix_type';
+    action: 'normalize' | 'add_missing' | 'fix_type' | 'delete';
   }>;
 }
 
@@ -34,6 +34,11 @@ interface PreviewResult {
   items: PreviewItem[];
   totalChanges: number;
 }
+
+// Legacy records can exist whose stored data holds no task text at all (e.g. only
+// `completed`). They render as blank rows and can't be restored, so the fix deletes them.
+const hasNoContent = (task: { content?: string | null }) =>
+  typeof task.content !== 'string' || task.content.trim().length === 0;
 
 export function FixSection({ encryptionKey }: FixSectionProps) {
   const [isFixing, setIsFixing] = useState(false);
@@ -176,6 +181,27 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
               type: 'calendar_event',
               name: event.title || `Event ${event.id.slice(0, 8)}`,
               changes
+            });
+          }
+        }
+      }
+
+      // Preview tasks without content (these get deleted)
+      const { data: tasks } = await backend.canDoList.getAll();
+
+      if (tasks) {
+        for (const task of tasks) {
+          if (hasNoContent(task)) {
+            previewItems.push({
+              id: task.id,
+              type: 'task',
+              name: `Task ${task.id.slice(0, 8)} (${task.completed ? 'completed' : 'open'})`,
+              changes: [{
+                field: 'content',
+                from: 'No content',
+                to: 'Delete task',
+                action: 'delete'
+              }]
             });
           }
         }
@@ -327,6 +353,36 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
         errors: eventsErrors
       });
 
+      // Delete tasks without content
+      console.log('Removing tasks without content...');
+      const { data: tasks } = await backend.canDoList.getAll();
+
+      let tasksProcessed = 0;
+      let tasksDeleted = 0;
+      let tasksErrors = 0;
+
+      if (tasks) {
+        for (const task of tasks) {
+          tasksProcessed++;
+          if (!hasNoContent(task)) continue;
+          try {
+            const { error } = await backend.canDoList.delete(task.id);
+            if (error) throw new Error(error);
+            tasksDeleted++;
+          } catch (error) {
+            console.error(`Failed to delete task ${task.id}:`, error);
+            tasksErrors++;
+          }
+        }
+      }
+
+      results.push({
+        type: 'tasks',
+        processed: tasksProcessed,
+        fixed: tasksDeleted,
+        errors: tasksErrors
+      });
+
       setFixResults(results);
       
       if (results.some(r => r.fixed > 0)) {
@@ -365,9 +421,10 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
             Fix Corrupted Data
           </CardTitle>
           <CardDescription>
-            Scan and fix corrupted data across calendars and calendar events. Use "Preview Changes" 
-            to see exactly what would be modified before applying fixes. This will normalize 
-            legacy camelCase properties to snake_case and fix missing essential fields.
+            Scan and fix corrupted data across calendars, calendar events and tasks. Use "Preview Changes" 
+            to see exactly what would be modified or deleted before applying fixes. This will normalize 
+            legacy camelCase properties to snake_case, fix missing essential fields and delete tasks 
+            that have no content.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -446,7 +503,9 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
                         <div key={item.id} className="border rounded-lg p-3 bg-white">
                           <div className="flex items-center gap-2 mb-2">
                             <div className="p-1 bg-blue-100 rounded">
-                              {item.type === 'calendar' ? (
+                              {item.type === 'task' ? (
+                                <Trash2 className="h-3 w-3 text-red-600" />
+                              ) : item.type === 'calendar' ? (
                                 <svg className="h-3 w-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
@@ -466,10 +525,12 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
                                 <div className={`px-2 py-1 rounded text-xs font-medium ${
                                   change.action === 'normalize' ? 'bg-yellow-100 text-yellow-800' :
                                   change.action === 'add_missing' ? 'bg-green-100 text-green-800' :
+                                  change.action === 'delete' ? 'bg-red-100 text-red-800' :
                                   'bg-blue-100 text-blue-800'
                                 }`}>
                                   {change.action === 'normalize' ? 'Normalize' :
-                                   change.action === 'add_missing' ? 'Add Missing' : 'Fix Type'}
+                                   change.action === 'add_missing' ? 'Add Missing' :
+                                   change.action === 'delete' ? 'Delete' : 'Fix Type'}
                                 </div>
                                 <div className="font-mono text-xs">
                                   <span className="text-red-600">{change.from}</span>
@@ -513,7 +574,9 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-100 rounded-full">
-                        {result.type === 'calendars' ? (
+                        {result.type === 'tasks' ? (
+                          <Trash2 className="h-4 w-4 text-blue-600" />
+                        ) : result.type === 'calendars' ? (
                           <svg className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
@@ -525,7 +588,7 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
                       </div>
                       <div>
                         <div className="font-medium">
-                          {result.type === 'calendars' ? 'Calendars' : 'Calendar Events'}
+                          {result.type === 'calendars' ? 'Calendars' : result.type === 'tasks' ? 'Tasks' : 'Calendar Events'}
                         </div>
                         <div className="text-sm text-muted-foreground">
                           {result.processed} processed
@@ -534,7 +597,7 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
                     </div>
                     <div className="text-right">
                       <div className="text-sm">
-                        <span className="text-green-600 font-medium">{result.fixed} fixed</span>
+                        <span className="text-green-600 font-medium">{result.fixed} {result.type === 'tasks' ? 'deleted' : 'fixed'}</span>
                         {result.errors > 0 && (
                           <span className="text-red-600 font-medium ml-2">{result.errors} errors</span>
                         )}
@@ -570,6 +633,7 @@ export function FixSection({ encryptionKey }: FixSectionProps) {
               <li>Converts legacy camelCase properties (isVisible, isDefault, startTime, calendarId, etc.) to snake_case</li>
               <li>Consolidates legacy recurrence properties (recurrenceFrequency, recurrenceInterval, recurrenceEndDate) into recurrence_rule</li>
               <li>Adds missing essential fields like calendar names and colors</li>
+              <li>Deletes tasks that have no content (legacy records that can't be restored)</li>
               <li>Normalizes calendar and event data structure</li>
               <li>Ensures data consistency across the application</li>
             </ul>
