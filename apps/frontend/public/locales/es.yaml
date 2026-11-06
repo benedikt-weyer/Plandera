@@ -122,6 +122,8 @@ calendar:
   endTime: Hora de Finalización
   startDate: Fecha de Inicio
   endDate: Fecha de Finalización
+  moveWeekBack: 1 semana antes
+  moveWeekForward: 1 semana después
   allDay: Todo el Día
   location: Ubicación
   noEvents: No hay eventos

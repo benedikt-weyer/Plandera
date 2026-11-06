@@ -122,6 +122,8 @@ calendar:
   endTime: End Time
   startDate: Start Date
   endDate: End Date
+  moveWeekBack: 1 week earlier
+  moveWeekForward: 1 week later
   allDay: All Day
   location: Location
   noEvents: No events

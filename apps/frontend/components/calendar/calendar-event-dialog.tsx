@@ -15,8 +15,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Calendar, CalendarEvent, RecurrenceFrequency } from '@/utils/calendar/calendar-types';
 import { getRecurrencePattern } from '@/utils/calendar/eventDataProcessing';
-import { format, parse, isValid, addMinutes } from 'date-fns';
-import { Link2, ListTodo, Timer, Trash2 } from 'lucide-react';
+import { format, parse, isValid, addMinutes, addDays } from 'date-fns';
+import { ChevronLeft, ChevronRight, Link2, ListTodo, Timer, Trash2 } from 'lucide-react';
 import { CountdownDecrypted, ProjectDecrypted } from '@/utils/api/types';
 import { EventTaskProjectPicker } from './event-task-project-picker';
 
@@ -267,6 +267,19 @@ export function CalendarEventDialog({
       parentGroupEventId: selectedEvent?.parent_group_event_id ?? undefined
     });
   }, [selectedEvent, form, calendars, defaultCalendarId]);
+
+  // Move the event by whole days by shifting both its start and end date (saved with the form)
+  const shiftEventByDays = (days: number) => {
+    for (const fieldName of ['startDate', 'endDate'] as const) {
+      const current = parse(form.getValues(fieldName), 'yyyy-MM-dd', new Date());
+      if (isValid(current)) {
+        form.setValue(fieldName, format(addDays(current, days), 'yyyy-MM-dd'), {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    }
+  };
 
   // Handle form submission
   const handleFormSubmit: SubmitHandler<EventFormValues> = async (values) => {
@@ -750,6 +763,30 @@ export function CalendarEventDialog({
                 />
               )}
             </div>
+
+            {/* Move the whole event one week back or forward (applied on save) */}
+            {!isReadOnly && (
+              <div className="grid grid-cols-2 gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => shiftEventByDays(-7)}
+                >
+                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  {t('calendar.moveWeekBack')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => shiftEventByDays(7)}
+                >
+                  {t('calendar.moveWeekForward')}
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+            )}
 
             {/* Recurrence Settings */}
             <div>
