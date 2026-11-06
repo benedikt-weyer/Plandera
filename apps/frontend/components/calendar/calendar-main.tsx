@@ -17,6 +17,11 @@ import {
   getChildEventsForGroupInstance,
   resolveGroupChildForEdit,
 } from "@/utils/calendar/event-groups";
+import {
+  createEventCloneDraft,
+  pickWritableCalendarId,
+} from "@/utils/calendar/ics-clone";
+import { toast } from "sonner";
 import { useCalendar } from "@/stores/calendar-store";
 
 import {
@@ -534,9 +539,21 @@ export function CalendarMain({
   // Handle clone event and open edit dialog with cloned event
   const onCloneEventHandler = useCallback(
     async (eventToClone: CalendarEvent) => {
-      // Prevent cloning ICS events
+      // ICS events are read-only, so they are cloned into a regular calendar: open a new-event
+      // form filled with the ICS event's data, in which the target calendar can be chosen.
       if (isICSEvent(eventToClone)) {
-        console.error("Events from ICS calendars cannot be cloned");
+        const targetCalendarId = pickWritableCalendarId(
+          visibleCalendars,
+          defaultCalendarId,
+        );
+        if (!targetCalendarId) {
+          toast.error(
+            "Create or show a regular (non-ICS) calendar to clone this event into",
+          );
+          return;
+        }
+        setSelectedEvent(createEventCloneDraft(eventToClone, targetCalendarId));
+        setIsDialogOpen(true);
         return;
       }
       const success = await onCloneEvent(eventToClone);
@@ -546,7 +563,14 @@ export function CalendarMain({
         setIsDialogOpen(false);
       }
     },
-    [onCloneEvent, isICSEvent, setSelectedEvent, setIsDialogOpen],
+    [
+      onCloneEvent,
+      isICSEvent,
+      visibleCalendars,
+      defaultCalendarId,
+      setSelectedEvent,
+      setIsDialogOpen,
+    ],
   );
 
   // Callback for deleting a single occurrence

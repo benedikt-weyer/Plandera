@@ -208,6 +208,13 @@ export function CalendarEventDialog({
   const isICSEvent = selectedEvent?.id?.startsWith('ics-') ?? false;
   const selectedCalendar = calendars.find(cal => cal.id === selectedEvent?.calendar_id);
   const isReadOnly = isICSEvent;
+  // A pre-filled event that is not saved yet (new event from a time slot, or a clone), id is "new"
+  const isUnsavedDraft = selectedEvent?.id === 'new';
+  // ICS calendars are read-only, so events can only be put into regular calendars
+  // (an ICS event being viewed keeps showing its own calendar)
+  const selectableCalendars = calendars.filter(
+    cal => cal.type !== 'ics' || cal.id === selectedEvent?.calendar_id,
+  );
 
   // Initialize form with react-hook-form and zod validation
   const form = useForm({
@@ -535,7 +542,7 @@ export function CalendarEventDialog({
       <DialogContent onInteractOutside={handleMainDialogInteractOutside}>
         <DialogHeader>
           <DialogTitle>
-            {isReadOnly ? t('calendar.viewEvent') : (selectedEvent ? t('calendar.editEvent') : t('calendar.addNewEvent'))}
+            {isReadOnly ? t('calendar.viewEvent') : (selectedEvent && !isUnsavedDraft ? t('calendar.editEvent') : t('calendar.addNewEvent'))}
           </DialogTitle>
           {isReadOnly && (
             <div className="mt-2 text-sm text-blue-600 bg-blue-50 p-2 rounded-md">
@@ -631,7 +638,7 @@ export function CalendarEventDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {calendars.map(calendar => (
+                      {selectableCalendars.map(calendar => (
                         <SelectItem key={calendar.id} value={calendar.id}>
                           <div className="flex items-center gap-2">
                             <div 
@@ -1003,7 +1010,7 @@ export function CalendarEventDialog({
                     </Button>
                   </>
                 )}
-                {!isReadOnly && selectedEvent && onCreateTaskFromEvent && projects && !linkedTaskTitle && (
+                {!isReadOnly && selectedEvent && !isUnsavedDraft && onCreateTaskFromEvent && projects && !linkedTaskTitle && (
                   <Button
                     type="button"
                     variant="secondary"
@@ -1013,20 +1020,24 @@ export function CalendarEventDialog({
                     Create Task
                   </Button>
                 )}
-                {selectedEvent && onClone && (
+                {selectedEvent && !isUnsavedDraft && onClone && (
                   <Button
                     type="button"
                     variant="secondary"
                     onClick={(e) => {
                       e.stopPropagation();
                       onClone(selectedEvent);
-                      onOpenChange(false);
+                      // Cloning a read-only ICS event opens a new-event form (to pick the calendar)
+                      // in this same dialog, so it must stay open.
+                      if (!isReadOnly) {
+                        onOpenChange(false);
+                      }
                     }}
                   >
                     Clone
                   </Button>
                 )}
-                {selectedEvent && !isReadOnly && (() => {
+                {selectedEvent && !isUnsavedDraft && !isReadOnly && (() => {
                   const recurrencePattern = getRecurrencePattern(selectedEvent);
                   const isRecurring = recurrencePattern && recurrencePattern.frequency !== RecurrenceFrequency.None;
                   return (
@@ -1065,7 +1076,7 @@ export function CalendarEventDialog({
               {/* Right: primary action */}
               {!isReadOnly && (
                 <Button type="submit">
-                  {selectedEvent ? 'Update' : 'Add'} Event
+                  {selectedEvent && !isUnsavedDraft ? 'Update' : 'Add'} Event
                 </Button>
               )}
             </DialogFooter>

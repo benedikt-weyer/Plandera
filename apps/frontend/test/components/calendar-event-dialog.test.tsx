@@ -83,3 +83,53 @@ describe('CalendarEventDialog week shift buttons', () => {
     expect(values.endDate).toBe('2026-11-04');
   });
 });
+
+describe('CalendarEventDialog clone button', () => {
+  const icsCalendar: Calendar = { ...calendar, id: 'ics-cal', name: 'Holidays', type: 'ics', is_default: false };
+
+  function renderWithClone(selectedEvent: CalendarEvent) {
+    const onClone = jest.fn();
+    const onOpenChange = jest.fn();
+    render(
+      <CalendarEventDialog
+        isOpen
+        onOpenChange={onOpenChange}
+        selectedEvent={selectedEvent}
+        calendars={[calendar, icsCalendar]}
+        onSubmit={jest.fn()}
+        onDelete={jest.fn()}
+        onClone={onClone}
+      />,
+    );
+    return { onClone, onOpenChange };
+  }
+
+  it('keeps the dialog open when cloning a read-only ICS event (the clone form replaces it)', () => {
+    const { onClone, onOpenChange } = renderWithClone({
+      ...event,
+      id: 'ics-ics-cal-uid-1',
+      calendar_id: 'ics-cal',
+    });
+
+    fireEvent.click(screen.getByText('Clone'));
+    expect(onClone).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('still closes the dialog when cloning a normal event', () => {
+    const { onClone, onOpenChange } = renderWithClone(event);
+
+    fireEvent.click(screen.getByText('Clone'));
+    expect(onClone).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('shows an unsaved clone as a new event: add label, no clone or delete buttons', () => {
+    renderWithClone({ ...event, id: 'new' });
+
+    expect(screen.getByText('Add Event')).toBeInTheDocument();
+    expect(screen.queryByText('Update Event')).not.toBeInTheDocument();
+    expect(screen.queryByText('Clone')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Delete event')).not.toBeInTheDocument();
+  });
+});
