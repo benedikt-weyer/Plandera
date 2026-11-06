@@ -1,8 +1,13 @@
 # Build context is the repo root (see docker-compose.yml / CI), so this
 # Dockerfile can resolve the pnpm workspace root and let turbo prune the
 # graph down to just what the frontend package needs.
-FROM node:lts AS base
-RUN corepack enable pnpm
+# Node 26 (LTS "Lithium"), pinned by version and digest so a moving tag can't
+# change the toolchain under us. Corepack is no longer bundled with Node 25+, so
+# pnpm is installed via npm; keep PNPM_VERSION in sync with `packageManager` in
+# the root package.json.
+FROM node:26.13.0@sha256:438603bbb5cda404b9416f0b5c8026f61501ab911760d861ec28c36b5d675725 AS base
+ARG PNPM_VERSION=9.15.0
+RUN npm install -g pnpm@${PNPM_VERSION}
 
 # Prune the workspace down to the frontend package + its dependencies
 FROM base AS pruner

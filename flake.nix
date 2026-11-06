@@ -23,7 +23,7 @@
             packages = with pkgs;
               [
                 # Node.js and related tools for Next.js frontend
-                nodejs_20
+                nodejs_26
                 pnpm
                 typescript
                 typescript-language-server
