@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { getDecryptedBackend } from '@/utils/api/decrypted-backend';
 import { UserSettingsDecrypted } from '@/utils/api/types';
+import { getStoredCryptKey } from '@/utils/cryptography/encryption';
 import type { Language } from '@/utils/i18n/types';
 
 interface SettingsState {
@@ -24,9 +25,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   error: null,
 
   loadSettings: async () => {
+    // No crypt key means nobody is logged in (e.g. sign-in page): use defaults
+    // quietly instead of throwing from getDecryptedBackend().
+    if (!getStoredCryptKey()) {
+      set({ error: null, loading: false });
+      return;
+    }
+
     try {
       set({ loading: true });
-      
+
       const backend = getDecryptedBackend();
       const response = await backend.userSettings.get();
       
