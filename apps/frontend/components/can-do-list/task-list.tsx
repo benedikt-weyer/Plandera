@@ -57,7 +57,7 @@ interface DroppableTaskItemProps {
   allTasks: CanDoItemDecrypted[];
   onToggleComplete: (id: string, completed: boolean) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
-  onUpdateTask: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string) => Promise<void>;
+  onUpdateTask: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string) => Promise<void>;
   onToggleMyDay?: (id: string) => Promise<void>;
   onScheduleTask?: (taskId: string) => Promise<void>;
   isScheduled: boolean;
@@ -284,7 +284,7 @@ interface TaskListProps {
   projects?: ProjectDecrypted[];
   onToggleComplete: (id: string, completed: boolean) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
-  onUpdateTask: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string) => Promise<void>;
+  onUpdateTask: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string) => Promise<void>;
   onToggleMyDay?: (id: string) => Promise<void>;
   onScheduleTask?: (taskId: string) => Promise<void>;
   isTaskScheduled?: (taskId: string) => boolean;

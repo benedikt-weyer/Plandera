@@ -73,6 +73,7 @@ interface TaskListItemProps {
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
+    description?: string,
   ) => Promise<void>;
   readonly onToggleMyDay?: (id: string) => Promise<void>;
   readonly onScheduleTask?: (taskId: string) => Promise<void>;
@@ -210,6 +211,7 @@ export default function TaskListItem({
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
+    description?: string,
   ) => {
     setIsUpdating(true);
     try {
@@ -224,6 +226,7 @@ export default function TaskListItem({
         blockedBy,
         myDay,
         parentTaskId,
+        description,
       );
     } finally {
       setIsUpdating(false);
@@ -516,6 +519,11 @@ export default function TaskListItem({
                 <span className="block line-clamp-2 md:truncate">
                   {task.content}
                 </span>
+                {task.description && (
+                  <span className="block truncate text-xs text-muted-foreground font-normal no-underline">
+                    {task.description}
+                  </span>
+                )}
               </span>
               {/* Show blocked indicator on the same line for mobile */}
               {isBlocked && (

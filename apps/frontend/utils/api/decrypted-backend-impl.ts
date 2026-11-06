@@ -81,6 +81,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
   private async decryptCanDoItem(encrypted: CanDoItemEncrypted): Promise<CanDoItemDecrypted> {
     const decryptedData = await this.decryptItemData<{
       content: string;
+      description?: string;
       completed: boolean;
       due_date?: string;
       impact?: number;
@@ -211,6 +212,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
     create: async (request: CreateCanDoItemDecryptedRequest): Promise<ApiResponse<CanDoItemDecrypted>> => {
       const encrypted = await this.encryptItemData({
         content: request.content,
+        description: request.description,
         completed: request.completed ?? false,
         due_date: request.due_date,
         impact: request.impact,
@@ -239,7 +241,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
       let encrypted: EncryptedRecordPayload | undefined;
 
       const hasEncryptedFieldUpdate =
-        'content' in request || 'completed' in request ||
+        'content' in request || 'description' in request || 'completed' in request ||
         'due_date' in request || 'impact' in request ||
         'urgency' in request || 'tags' in request ||
         'duration_minutes' in request || 'blocked_by' in request ||
@@ -254,6 +256,7 @@ export class DecryptedBackendImpl implements DecryptedBackendInterface {
 
         encrypted = await this.encryptItemData({
           content: 'content' in request ? request.content : currentData.content,
+          description: 'description' in request ? request.description : currentData.description,
           completed: 'completed' in request ? request.completed : currentData.completed,
           due_date: 'due_date' in request ? request.due_date : currentData.due_date,
           impact: 'impact' in request ? request.impact : currentData.impact,

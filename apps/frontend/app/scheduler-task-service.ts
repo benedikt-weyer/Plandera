@@ -93,7 +93,8 @@ export class CanDoListPageService {
     dueDate?: Date,
     blockedBy?: string,
     myDay?: boolean,
-    parentTaskId?: string
+    parentTaskId?: string,
+    description?: string
   ): Promise<CanDoItemDecrypted> {
     try {
       const updateData: UpdateCanDoItemDecryptedRequest = {
@@ -107,6 +108,7 @@ export class CanDoListPageService {
         ...(blockedBy !== undefined && { blocked_by: blockedBy }),
         ...(myDay !== undefined && { my_day: myDay }),
         ...(parentTaskId !== undefined && { parent_task_id: parentTaskId }),
+        ...(description !== undefined && { description }),
       };
 
       return await this.taskService.updateTask(updateData);

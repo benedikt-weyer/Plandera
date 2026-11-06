@@ -267,12 +267,12 @@ function SchedulerPageContent() {
     }
   };
 
-  const handleUpdateTask = async (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string): Promise<boolean> => {
+  const handleUpdateTask = async (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string): Promise<boolean> => {
     if (!canDoListPageService) return false;
 
     try {
       const updatedTask = await canDoListPageService.updateTask(
-        id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId
+        id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description
       );
       setTasks(prev => prev.map(task => task.id === id ? updatedTask : task));
       return true;
@@ -1216,10 +1216,11 @@ function SchedulerPageContent() {
     dueDate?: Date,
     blockedBy?: string,
     myDay?: boolean,
-    parentTaskId?: string
+    parentTaskId?: string,
+    description?: string
   ): Promise<boolean> => {
     if (content !== undefined) {
-      return await handleUpdateTask(id, content, duration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId);
+      return await handleUpdateTask(id, content, duration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description);
     }
     return false;
   };
@@ -1242,9 +1243,11 @@ function SchedulerPageContent() {
     urgency?: number,
     dueDate?: Date,
     blockedBy?: string,
-    myDay?: boolean
+    myDay?: boolean,
+    parentTaskId?: string,
+    description?: string
   ): Promise<void> => {
-    await handleUpdateTask(id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay);
+    await handleUpdateTask(id, content, estimatedDuration, projectId, impact, urgency, dueDate, blockedBy, myDay, parentTaskId, description);
   };
 
   const wrappedLoadTasks = async (): Promise<void> => {

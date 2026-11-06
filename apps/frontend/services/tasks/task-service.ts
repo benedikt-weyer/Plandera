@@ -228,6 +228,7 @@ export class TaskService {
       
       return allTasks.filter(task => 
         task.content.toLowerCase().includes(lowercaseQuery) ||
+        (task.description?.toLowerCase().includes(lowercaseQuery) ?? false) ||
         (task.tags && task.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)))
       );
     } catch (error) {

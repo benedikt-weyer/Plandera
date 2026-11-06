@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -89,6 +90,7 @@ const PREDEFINED_DURATIONS = [
 // Define schema for edit task validation
 const editTaskSchema = z.object({
   content: z.string().min(1, { message: "Task content is required" }),
+  description: z.string().optional(),
   estimatedDuration: z
     .string()
     .optional()
@@ -112,7 +114,7 @@ interface EditTaskDialogProps {
   readonly task: CanDoItemDecrypted | null;
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly onSave: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string) => Promise<void>;
+  readonly onSave: (id: string, content: string, estimatedDuration?: number, projectId?: string, impact?: number, urgency?: number, dueDate?: Date, blockedBy?: string, myDay?: boolean, parentTaskId?: string, description?: string) => Promise<void>;
   readonly isLoading?: boolean;
   readonly projects?: ProjectDecrypted[];
   readonly tasks?: CanDoItemDecrypted[];
@@ -173,6 +175,7 @@ export default function EditTaskDialog({
     resolver: zodResolver(editTaskSchema),
     defaultValues: {
       content: '',
+      description: '',
       estimatedDuration: '',
       blockedBy: '',
       myDay: false,
@@ -185,6 +188,7 @@ export default function EditTaskDialog({
     if (task && isOpen) {
       form.reset({
         content: task.content || '',
+        description: task.description ?? '',
         estimatedDuration: formatDurationInput(task.duration_minutes),
         projectId: task.project_id ?? '',
         impact: task.impact ?? 0,
@@ -206,6 +210,7 @@ export default function EditTaskDialog({
     const blockedBy = values.blockedBy || undefined;
     const projectId = values.projectId || undefined; // Convert empty string to undefined
     const parentTaskId = values.parentTaskId || undefined; // Convert empty string to undefined
+    const description = (values.description ?? '').trim();
     
     // Safely handle content comparison with null/undefined checks
     const currentContent = (values.content || '').trim();
@@ -213,6 +218,7 @@ export default function EditTaskDialog({
     
     if (
       currentContent === originalContent &&
+      description === (task.description ?? '').trim() &&
       duration === task.duration_minutes &&
       projectId === task.project_id &&
       impact === task.impact &&
@@ -225,7 +231,7 @@ export default function EditTaskDialog({
       onClose();
       return;
     }
-    await onSave(task.id, currentContent, duration, projectId, impact, urgency, dueDate, blockedBy, values.myDay, parentTaskId);
+    await onSave(task.id, currentContent, duration, projectId, impact, urgency, dueDate, blockedBy, values.myDay, parentTaskId, description);
     onClose();
   };
 
@@ -303,6 +309,16 @@ export default function EditTaskDialog({
                 {form.formState.errors.content.message}
               </p>
             )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              rows={4}
+              placeholder="More details about this task (optional)"
+              disabled={isLoading}
+              {...form.register('description')}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="estimatedDuration">Estimated Duration</Label>

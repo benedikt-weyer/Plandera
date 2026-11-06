@@ -121,6 +121,7 @@ export async function decryptExportedData(rawData: ExportedData): Promise<Decryp
       return {
         id: task.id,
         content: decrypted.content,
+        description: decrypted.description,
         completed: decrypted.completed,
         estimatedDuration: decrypted.duration_minutes,
         impact: decrypted.impact,
@@ -408,6 +409,7 @@ export async function importDecryptedUserData(data: DecryptedExportData): Promis
   for (const task of tasks) {
     const result = await backend.canDoList.create({
       content: task.content,
+      description: task.description,
       completed: task.completed,
       due_date: task.dueDate,
       impact: task.impact,

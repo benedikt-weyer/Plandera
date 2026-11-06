@@ -63,6 +63,7 @@ interface CanDoListMainProps {
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
+    description?: string,
   ) => Promise<boolean>;
   handleUpdateTask: (
     id: string,
@@ -75,6 +76,7 @@ interface CanDoListMainProps {
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
+    description?: string,
   ) => Promise<boolean>;
   handleToggleComplete: (id: string, completed: boolean) => Promise<boolean>;
   handleDeleteTask: (id: string) => Promise<boolean>;
@@ -356,8 +358,9 @@ export default function CanDoListMain({
   // Configure Fuse.js for fuzzy search
   const fuseOptions = {
     keys: [
-      { name: "content", weight: 0.7 },
-      { name: "projectName", weight: 0.3 },
+      { name: "content", weight: 0.6 },
+      { name: "description", weight: 0.2 },
+      { name: "projectName", weight: 0.2 },
     ],
     threshold: 0.3, // Lower = more strict, higher = more fuzzy
     includeScore: true,
@@ -599,6 +602,7 @@ export default function CanDoListMain({
     blockedBy?: string,
     myDay?: boolean,
     parentTaskId?: string,
+    description?: string,
   ) => {
     await handleUpdateTask(
       id,
@@ -611,6 +615,7 @@ export default function CanDoListMain({
       blockedBy,
       myDay,
       parentTaskId,
+      description,
     );
   };
 

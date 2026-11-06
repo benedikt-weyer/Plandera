@@ -116,6 +116,7 @@ export interface CanDoItemDecrypted {
   created_at: string;
   updated_at: string;
   content: string;
+  description?: string; // Longer free-text details about the task
   completed: boolean;
   due_date?: string;
   impact?: number; // 0-10 scale
@@ -153,6 +154,7 @@ export interface UpdateCanDoItemRequest {
 export interface CreateCanDoItemDecryptedRequest {
   project_id?: string;
   content: string;
+  description?: string;
   completed?: boolean;
   due_date?: string;
   impact?: number; // 0-10 scale
@@ -169,6 +171,7 @@ export interface UpdateCanDoItemDecryptedRequest {
   id: string;
   project_id?: string;
   content?: string;
+  description?: string;
   completed?: boolean;
   due_date?: string;
   impact?: number; // 0-10 scale
