@@ -12,6 +12,11 @@ import { useWeekStartDay } from "@/stores/settings-store";
 import { CalendarGridMobile } from "./calendar-grid-mobile";
 import { CalendarDayAgenda } from "./calendar-day-agenda";
 import { CalendarMonthGrid } from "./calendar-month-grid";
+import { EventGroupModal } from "./event-group-modal";
+import {
+  getChildEventsForGroupInstance,
+  resolveGroupChildForEdit,
+} from "@/utils/calendar/event-groups";
 import { useCalendar } from "@/stores/calendar-store";
 
 import {
@@ -414,6 +419,16 @@ export function CalendarMain({
     },
     [setSelectedEvent, setIsDialogOpen],
   );
+
+  // Group modal (a group event with its child events) used by the day and month views
+  const [groupModalEvent, setGroupModalEvent] = useState<CalendarEvent | null>(
+    null,
+  );
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const openGroupModal = useCallback((event: CalendarEvent) => {
+    setGroupModalEvent(event);
+    setIsGroupModalOpen(true);
+  }, []);
 
   // Open dialog for creating a new event
   const openNewEventDialog = useCallback(
@@ -938,6 +953,8 @@ export function CalendarMain({
               currentDate={selectedDate}
               selectedDate={selectedDate}
               events={eventsInCurrentMonth}
+              allEvents={visibleEvents}
+              onGroupClick={openGroupModal}
               calendars={calendarRenderData}
               openEditDialog={openEditDialog}
               onAddEvent={handleMonthGridAddEvent}
@@ -947,6 +964,8 @@ export function CalendarMain({
             <CalendarDayAgenda
               day={selectedDate}
               events={eventsInCurrentDay}
+              allEvents={visibleEvents}
+              onGroupClick={openGroupModal}
               calendars={calendarRenderData}
               openEditDialog={openEditDialog}
               openNewEventDialog={openNewEventDialogWithDayHandler}
@@ -1018,6 +1037,8 @@ export function CalendarMain({
                 currentDate={selectedDate}
                 selectedDate={selectedDate}
                 events={eventsInCurrentMonth}
+                allEvents={visibleEvents}
+                onGroupClick={openGroupModal}
                 calendars={calendarRenderData}
                 openEditDialog={openEditDialog}
                 onAddEvent={handleMonthGridAddEvent}
@@ -1027,6 +1048,8 @@ export function CalendarMain({
               <CalendarDayAgenda
                 day={selectedDate}
                 events={eventsInCurrentDay}
+                allEvents={visibleEvents}
+                onGroupClick={openGroupModal}
                 calendars={calendarRenderData}
                 openEditDialog={openEditDialog}
                 openNewEventDialog={openNewEventDialogWithDayHandler}
@@ -1045,6 +1068,23 @@ export function CalendarMain({
           </div>
         </div>
       </div>
+
+      {/* Group modal for the day and month views */}
+      <EventGroupModal
+        isOpen={isGroupModalOpen}
+        onOpenChange={setIsGroupModalOpen}
+        groupEvent={groupModalEvent}
+        childEvents={getChildEventsForGroupInstance(
+          groupModalEvent,
+          visibleEvents,
+        )}
+        calendars={calendars}
+        onEditGroup={openEditDialog}
+        onEventClick={(event) =>
+          openEditDialog(resolveGroupChildForEdit(event, visibleEvents))
+        }
+        onEventUpdate={handleEventUpdateWithRecurrenceCheck}
+      />
 
       {/* Event dialog */}
       <CalendarEventDialog

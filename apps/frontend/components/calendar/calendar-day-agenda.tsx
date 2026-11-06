@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { differenceInMinutes, format, isSameDay } from "date-fns";
+import { CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CalendarEvent } from "@/utils/calendar/calendar-types";
+import {
+  getGroupChildrenForDay,
+  getGroupEventStyle,
+  isNestedGroupChild,
+} from "@/utils/calendar/event-groups";
 import { getRecurrencePattern } from "@/utils/calendar/eventDataProcessing";
 import { calculateEventLayout } from "@/utils/calendar/calendar-render";
 
@@ -18,6 +24,10 @@ interface CalendarDayAgendaProps {
     isVisible: boolean;
   }[];
   readonly openEditDialog: (event: CalendarEvent) => void;
+  /** Called instead of `openEditDialog` when a group event is clicked (shows the group with its children). */
+  readonly onGroupClick?: (event: CalendarEvent) => void;
+  /** Every visible event, not only the ones of this day; used to find a group's children. */
+  readonly allEvents?: CalendarEvent[];
   readonly openNewEventDialog: (day: Date, isAllDay?: boolean) => void;
   readonly showFloatingAddButton?: boolean;
   readonly floatingAddButtonClassName?: string;
@@ -29,6 +39,8 @@ export function CalendarDayAgenda({
   events,
   calendars,
   openEditDialog,
+  onGroupClick,
+  allEvents,
   openNewEventDialog,
   showFloatingAddButton = false,
   floatingAddButtonClassName = "fixed bottom-6 right-6 md:hidden",
@@ -54,13 +66,18 @@ export function CalendarDayAgenda({
     [],
   );
 
+  // Events used to look up a group's children (also finds children outside of the current day)
+  const lookupEvents = allEvents ?? events;
+
+  // Child events are shown inside their group, not as separate events (same as in the week view)
   const dayEvents = useMemo(() => {
     return events.filter(
       (event) =>
-        isSameDay(new Date(event.start_time), day) ||
-        isSameDay(new Date(event.end_time), day),
+        (isSameDay(new Date(event.start_time), day) ||
+          isSameDay(new Date(event.end_time), day)) &&
+        !isNestedGroupChild(event, lookupEvents),
     );
-  }, [day, events]);
+  }, [day, events, lookupEvents]);
 
   const allDayEvents = dayEvents.filter((event) => event.all_day);
   const timedEvents = dayEvents.filter((event) => !event.all_day);
@@ -163,6 +180,161 @@ export function CalendarDayAgenda({
     }
 
     return groups;
+  };
+
+  const renderGroupEvent = (
+    event: CalendarEvent,
+    positionStyle: CSSProperties,
+    className: string,
+  ) => {
+    const color = getEventColor(event);
+    const isTaskReservationSpace = Boolean(event.is_task_reservation_space);
+    const groupStart = new Date(event.start_time);
+    const groupEnd = new Date(event.end_time);
+    const groupDuration = differenceInMinutes(groupEnd, groupStart);
+    const childEvents =
+      groupDuration > 0 ? getGroupChildrenForDay(event, lookupEvents, day) : [];
+
+    return (
+      <div
+        key={event.id}
+        data-event-id={event.id}
+        role="button"
+        className={`group pointer-events-auto absolute cursor-pointer overflow-hidden rounded-md p-2 text-xs shadow-sm backdrop-blur-sm ${className}`}
+        style={{
+          ...positionStyle,
+          minHeight: "2rem",
+          ...getGroupEventStyle(color, isTaskReservationSpace),
+        }}
+        onClick={() => (onGroupClick ?? openEditDialog)(event)}
+      >
+        <div className="relative z-10 -mx-2 -mt-2 bg-white/80 px-2 pb-1 pt-2 transition-colors group-hover:bg-white/10 dark:bg-gray-900/80 dark:group-hover:bg-gray-900/10">
+          <div className="flex items-center gap-1 truncate font-medium text-gray-900 transition-opacity group-hover:opacity-10 dark:text-gray-100">
+            <span
+              className="inline-flex flex-shrink-0 items-center"
+              style={{ color }}
+            >
+              {isTaskReservationSpace ? (
+                <CalendarClock className="h-3.5 w-3.5" />
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+              )}
+            </span>
+            <span className="truncate">{event.title}</span>
+          </div>
+          <div className="truncate text-xs text-gray-700 transition-opacity group-hover:opacity-10 dark:text-gray-300">
+            {format(groupStart, "HH:mm")} - {format(groupEnd, "HH:mm")}
+          </div>
+        </div>
+        {event.location && (
+          <div className="relative z-10 truncate text-xs text-gray-700 dark:text-gray-300">
+            📍 {event.location}
+          </div>
+        )}
+
+        {childEvents.length > 0 && (
+          <div className="pointer-events-none absolute inset-0 z-0">
+            {childEvents.map((childEvent) => {
+              const childStart = new Date(childEvent.start_time);
+              const childEnd = new Date(childEvent.end_time);
+              const childDuration = differenceInMinutes(childEnd, childStart);
+              const minutesFromGroupStart = differenceInMinutes(
+                childStart,
+                groupStart,
+              );
+              const topPercent = Math.max(
+                0,
+                (minutesFromGroupStart / groupDuration) * 100,
+              );
+              const heightPercent = Math.min(
+                100 - topPercent,
+                (childDuration / groupDuration) * 100,
+              );
+
+              return (
+                <div
+                  key={childEvent.id}
+                  className="absolute left-1 right-1 overflow-hidden rounded-sm px-1 text-xs text-white shadow-sm"
+                  style={{
+                    top: `${topPercent}%`,
+                    height: `${heightPercent}%`,
+                    minHeight: "16px",
+                    backgroundColor: getEventColor(childEvent),
+                  }}
+                  title={`${childEvent.title} (${format(childStart, "HH:mm")} - ${format(childEnd, "HH:mm")})`}
+                >
+                  <div className="truncate text-[10px] font-medium">
+                    {childEvent.title}
+                  </div>
+                  {heightPercent > 15 && (
+                    <div className="truncate text-[9px] opacity-80">
+                      {format(childStart, "HH:mm")}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTimedEvent = (
+    event: CalendarEvent,
+    positionStyle: CSSProperties,
+    className: string,
+  ) => {
+    if (event.is_group_event) {
+      return renderGroupEvent(event, positionStyle, className);
+    }
+
+    const color = getEventColor(event);
+
+    return (
+      <div
+        key={event.id}
+        className={`pointer-events-auto absolute rounded-md border-l-4 p-2 text-xs shadow-sm ${className}`}
+        style={{
+          ...positionStyle,
+          backgroundColor: color,
+          borderLeftColor: color,
+          minHeight: "2rem",
+        }}
+        onClick={() => openEditDialog(event)}
+      >
+        <div className="line-clamp-1 font-medium text-white">{event.title}</div>
+        <div className="text-xs text-white opacity-90">
+          {format(new Date(event.start_time), "HH:mm")} -{" "}
+          {format(new Date(event.end_time), "HH:mm")}
+        </div>
+        {event.location && (
+          <div className="mt-1 line-clamp-1 text-xs text-white opacity-90">
+            📍 {event.location}
+          </div>
+        )}
+        {event.description && (
+          <div className="mt-1 line-clamp-1 text-xs text-white opacity-90">
+            {event.description}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const handleTimeSlotClick = (timeSlot: string) => {
@@ -277,84 +449,27 @@ export function CalendarDayAgenda({
             {groupOverlappingEvents(timedEvents).flatMap((group) => {
               if (group.length === 1) {
                 const event = group[0];
-                const style = getEventStyle(event);
-                const color = getEventColor(event);
-
-                return (
-                  <div
-                    key={event.id}
-                    className="pointer-events-auto absolute left-1 right-1 rounded-md border-l-4 p-2 text-xs shadow-sm"
-                    style={{
-                      top: style.top,
-                      height: style.height,
-                      backgroundColor: color,
-                      borderLeftColor: color,
-                      minHeight: "2rem",
-                    }}
-                    onClick={() => openEditDialog(event)}
-                  >
-                    <div className="line-clamp-1 font-medium text-white">
-                      {event.title}
-                    </div>
-                    <div className="text-xs text-white opacity-90">
-                      {format(new Date(event.start_time), "HH:mm")} -{" "}
-                      {format(new Date(event.end_time), "HH:mm")}
-                    </div>
-                    {event.location && (
-                      <div className="mt-1 line-clamp-1 text-xs text-white opacity-90">
-                        📍 {event.location}
-                      </div>
-                    )}
-                    {event.description && (
-                      <div className="mt-1 line-clamp-1 text-xs text-white opacity-90">
-                        {event.description}
-                      </div>
-                    )}
-                  </div>
+                return renderTimedEvent(
+                  event,
+                  getEventStyle(event),
+                  "left-1 right-1",
                 );
               }
 
               const layouts = calculateEventLayout(group);
               return layouts.map((layout) => {
-                const style = getEventStyle(layout.event);
-                const color = getEventColor(layout.event);
                 const columnWidth = 100 / layout.totalColumns;
                 const width = columnWidth * layout.columnSpan;
                 const left = columnWidth * layout.column;
 
-                return (
-                  <div
-                    key={layout.event.id}
-                    className="pointer-events-auto absolute rounded-md border-l-4 p-2 text-xs shadow-sm"
-                    style={{
-                      top: style.top,
-                      height: style.height,
-                      backgroundColor: color,
-                      borderLeftColor: color,
-                      minHeight: "2rem",
-                      width: `calc(${width}% - 4px)`,
-                      left: `calc(${left}% + 4px)`,
-                    }}
-                    onClick={() => openEditDialog(layout.event)}
-                  >
-                    <div className="line-clamp-1 font-medium text-white">
-                      {layout.event.title}
-                    </div>
-                    <div className="text-xs text-white opacity-90">
-                      {format(new Date(layout.event.start_time), "HH:mm")} -{" "}
-                      {format(new Date(layout.event.end_time), "HH:mm")}
-                    </div>
-                    {layout.event.location && (
-                      <div className="mt-1 line-clamp-1 text-xs text-white opacity-90">
-                        📍 {layout.event.location}
-                      </div>
-                    )}
-                    {layout.event.description && (
-                      <div className="mt-1 line-clamp-1 text-xs text-white opacity-90">
-                        {layout.event.description}
-                      </div>
-                    )}
-                  </div>
+                return renderTimedEvent(
+                  layout.event,
+                  {
+                    ...getEventStyle(layout.event),
+                    width: `calc(${width}% - 4px)`,
+                    left: `calc(${left}% + 4px)`,
+                  },
+                  "",
                 );
               });
             })}

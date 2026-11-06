@@ -18,45 +18,7 @@ import {
   DragMode // Import the DragMode enum
 } from '@/utils/calendar/calendar-drag';
 import { EventGroupModal } from './event-group-modal';
-
-// Helper function to generate virtual child events for recurring group instances
-const getChildEventsForGroupInstance = (
-  groupEvent: CalendarEvent | null,
-  allEvents: CalendarEvent[]
-): CalendarEvent[] => {
-  if (!groupEvent) return [];
-  
-  const baseGroupEventId = groupEvent.id.includes('-recurrence-')
-    ? groupEvent.id.split('-recurrence-')[0]
-    : groupEvent.id;
-  
-  const baseChildEvents = allEvents.filter(e => e.parent_group_event_id === baseGroupEventId);
-  const isRecurringInstance = groupEvent.id.includes('-recurrence-');
-  
-  if (isRecurringInstance) {
-    // For recurring group instances, create virtual child events with adjusted times
-    const recurringGroupStart = new Date(groupEvent.start_time);
-    
-    // Find the original (non-recurring) group event to calculate time offsets
-    const originalGroupEvent = allEvents.find(e => e.id === baseGroupEventId);
-    if (originalGroupEvent) {
-      const originalGroupStartTime = new Date(originalGroupEvent.start_time).getTime();
-      const recurringGroupStartTime = recurringGroupStart.getTime();
-      const timeOffset = recurringGroupStartTime - originalGroupStartTime;
-      
-      // Create virtual child events with adjusted times
-      return baseChildEvents.map(child => ({
-        ...child,
-        id: `${child.id}-recurrence-${format(recurringGroupStart, 'yyyy-MM-dd')}`,
-        start_time: new Date(new Date(child.start_time).getTime() + timeOffset).toISOString(),
-        end_time: new Date(new Date(child.end_time).getTime() + timeOffset).toISOString()
-      }));
-    }
-  }
-  
-  return baseChildEvents;
-};
-
+import { getChildEventsForGroupInstance } from '@/utils/calendar/event-groups';
 
 // -------- DayColumn Component --------
 interface DayColumnProps {
