@@ -540,6 +540,9 @@ class RustBackendImpl implements BackendInterface {
         storeCryptKey(credentials.cryptKey);
         this.storeSession(session);
 
+        // Registering also signs the new account in.
+        this.authStateCallbacks.forEach((callback) => callback('SIGNED_IN', session));
+
         return { session, user: session.user, error: null };
       } catch (error) {
         return {

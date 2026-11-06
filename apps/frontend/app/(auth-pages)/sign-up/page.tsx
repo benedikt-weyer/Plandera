@@ -62,6 +62,9 @@ function SignUpForm() {
       setMessage({ error: result.error });
     } else if (result.success) {
       setMessage({ success: result.success });
+      // Already signed in by signUpClient; a full navigation (as on sign-in)
+      // lets the app pick up the new session.
+      window.location.href = '/';
     }
   };
 

@@ -20,7 +20,9 @@ export const signUpClient = async (formData: FormData): Promise<{ error?: string
       console.error("Sign up error:", error);
       return { error };
     } else {
-      return { success: "Account created successfully! You can now sign in." };
+      // The backend implementation stores the session and crypt key on sign-up,
+      // so the new account is already signed in.
+      return { success: "Account created successfully! Signing you in..." };
     }
   } catch (error) {
     console.error("Sign up error:", error);
