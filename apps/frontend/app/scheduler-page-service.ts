@@ -282,8 +282,8 @@ export class SchedulerPageService {
     return this.eventOps.modifyAllInSeries(eventToModify, modifications, allEvents);
   }
 
-  async cloneEvent(event: CalendarEvent): Promise<CalendarEvent> {
-    return this.eventOps.cloneEvent(event);
+  async cloneEvent(event: CalendarEvent, allEvents: CalendarEvent[] = []): Promise<CalendarEvent[]> {
+    return this.eventOps.cloneEvent(event, allEvents);
   }
 
   async updateEvent(eventId: string, updates: any) {

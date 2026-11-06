@@ -834,14 +834,15 @@ function SchedulerPageContent() {
     if (!schedulerPageService) return false;
     
     try {
-      const clonedEvent = await schedulerPageService.cloneEvent(event);
-      setCalendarEvents(prev => [...prev, clonedEvent]);
+      // For an event group this also clones its child events
+      const clonedEvents = await schedulerPageService.cloneEvent(event, calendarEvents);
+      setCalendarEvents(prev => [...prev, ...clonedEvents]);
       return true;
     } catch (error) {
       setError('Failed to clone event');
       return false;
     }
-  }, [schedulerPageService, setError]);
+  }, [schedulerPageService, setError, calendarEvents]);
 
   const handleCreateTaskFromEvent = useCallback(async (
     eventId: string,

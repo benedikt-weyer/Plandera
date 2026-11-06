@@ -153,8 +153,8 @@ export class SchedulerEventService {
   /**
    * Clone an event
    */
-  async cloneEvent(event: CalendarEvent): Promise<CalendarEvent> {
-    return await this.calendarEventsService.cloneCalendarEvent(event);
+  async cloneEvent(event: CalendarEvent, allEvents: CalendarEvent[] = []): Promise<CalendarEvent[]> {
+    return await this.calendarEventsService.cloneCalendarEvent(event, allEvents);
   }
 
   /**

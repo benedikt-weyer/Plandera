@@ -6,6 +6,7 @@ import { CalendarEventDecrypted, CreateCalendarEventDecryptedRequest, UpdateCale
 import { sortEventsByStartTime, getRecurrencePattern } from '@/utils/calendar/eventDataProcessing';
 import { Calendar } from '@/utils/calendar/calendar-types';
 import { calculateNextOccurrence, calculatePreviousOccurrence } from '@/utils/calendar/recurrenceHelpers';
+import { getBaseEventId } from '@/utils/calendar/event-groups';
 import { 
   subDays,
   isSameDay,
@@ -182,12 +183,19 @@ export class CalendarEventsService {
   }
 
   /**
-   * Clone a calendar event
+   * Clone a calendar event.
+   *
+   * Cloning an event group creates a new group of the same kind (event group or task reservation
+   * space) and clones all of its child events into it. `allEvents` is used to find the children.
+   * Task links are not copied, so a task stays linked to its original event only.
+   *
+   * @returns the cloned event first, followed by its cloned child events (if any)
    */
-  async cloneCalendarEvent(event: CalendarEvent): Promise<CalendarEvent> {
+  async cloneCalendarEvent(event: CalendarEvent, allEvents: CalendarEvent[] = []): Promise<CalendarEvent[]> {
+    const createdEventIds: string[] = [];
+
     try {
-      // Create a copy of the event with a new title and updated timestamps
-      const clonedEventData = {
+      const clonedEvent = await this.createCalendarEvent({
         title: event.title,
         description: event.description,
         location: event.location,
@@ -196,11 +204,54 @@ export class CalendarEventsService {
         endTime: new Date(event.end_time),
         isAllDay: event.all_day || false,
         recurrenceRule: event.recurrence_rule,
-      };
+        isGroupEvent: event.is_group_event || undefined,
+        isTaskReservationSpace: event.is_group_event ? event.is_task_reservation_space : undefined,
+      });
+      createdEventIds.push(clonedEvent.id);
 
-      return this.createCalendarEvent(clonedEventData);
+      if (!event.is_group_event) {
+        return [clonedEvent];
+      }
+
+      // The group may be a recurrence instance; its children are stored on the original group.
+      // Keep every child at the same place relative to the group by applying the same time offset.
+      const baseGroupId = getBaseEventId(event.id);
+      const storedGroup = allEvents.find(candidate => candidate.id === baseGroupId);
+      const timeOffset = storedGroup
+        ? new Date(event.start_time).getTime() - new Date(storedGroup.start_time).getTime()
+        : 0;
+
+      const clonedChildren: CalendarEvent[] = [];
+      const children = allEvents.filter(candidate => candidate.parent_group_event_id === baseGroupId);
+      for (const child of children) {
+        const clonedChild = await this.createCalendarEvent({
+          title: child.title,
+          description: child.description,
+          location: child.location,
+          calendarId: child.calendar_id,
+          startTime: new Date(new Date(child.start_time).getTime() + timeOffset),
+          endTime: new Date(new Date(child.end_time).getTime() + timeOffset),
+          isAllDay: child.all_day || false,
+          recurrenceRule: child.recurrence_rule,
+          parentGroupEventId: clonedEvent.id,
+        });
+        createdEventIds.push(clonedChild.id);
+        clonedChildren.push(clonedChild);
+      }
+
+      return [clonedEvent, ...clonedChildren];
     } catch (error) {
       console.error('Failed to clone calendar event:', error);
+
+      // Do not leave a half-cloned group behind
+      for (const createdId of createdEventIds.reverse()) {
+        try {
+          await this.backend.calendarEvents.delete(createdId);
+        } catch (cleanupError) {
+          console.error(`Failed to clean up partially cloned event ${createdId}:`, cleanupError);
+        }
+      }
+
       throw new Error('Failed to clone calendar event');
     }
   }
