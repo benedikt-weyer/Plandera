@@ -98,6 +98,7 @@ tasks:
   autoplanNoEligibleTasks: No hay tareas elegibles disponibles para la planificación automática.
   autoplanNoAssignments: Ninguna tarea cabe en los espacios de reserva disponibles con el modo seleccionado.
   autoplanRemainingTasks: Tareas restantes
+  autoplanConstraintBlocked: Omitidas por sus condiciones de ejecución (fecha de inicio, días de la semana o franja horaria) - ningún espacio de reserva es posible para ellas
   applyAutoplan: Aplicar planificación
 
 projects:

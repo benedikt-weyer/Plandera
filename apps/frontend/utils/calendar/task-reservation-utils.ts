@@ -11,6 +11,10 @@ import { CanDoItemDecrypted } from "@/utils/api/types";
 import { CalendarEvent } from "@/utils/calendar/calendar-types";
 import { calculateRecommendationScore } from "@/utils/can-do-list/recommendation-utils";
 import { isTaskActuallyBlocked } from "@/utils/can-do-list/task-blocking-utils";
+import {
+  getExecutionWindows,
+  hasExecutionConstraints,
+} from "@/utils/can-do-list/execution-constraints";
 
 export type TaskAutoplanMode = "important-first" | "best-fit" | "balanced";
 
@@ -31,13 +35,29 @@ export interface TaskAutoplanAssignment {
 export interface TaskAutoplanPreview {
   assignments: TaskAutoplanAssignment[];
   unplannedTasks: CanDoItemDecrypted[];
+  /**
+   * Unplanned tasks that have no usable time in any reservation space because of their
+   * execution constraints (start date, weekdays, time window), regardless of other tasks.
+   */
+  constraintBlockedTasks: CanDoItemDecrypted[];
   eligibleTasks: CanDoItemDecrypted[];
   reservationGroups: CalendarEvent[];
   availableSlots: TaskReservationGroupSlot[];
 }
 
+interface FreeInterval {
+  start: Date;
+  end: Date;
+}
+
+/** A reservation slot together with the parts of it that are not yet taken by a planned task. */
 interface SlotCursor extends TaskReservationGroupSlot {
-  cursor: Date;
+  free: FreeInterval[];
+}
+
+interface Placement {
+  start: Date;
+  end: Date;
 }
 
 const DEFAULT_TASK_DURATION_MINUTES = 60;
@@ -173,30 +193,69 @@ function sortTasksByImportance(
 function createSlotCursors(slots: TaskReservationGroupSlot[]): SlotCursor[] {
   return slots.map((slot) => ({
     ...slot,
-    cursor: new Date(slot.start),
+    free: [{ start: new Date(slot.start), end: new Date(slot.end) }],
   }));
+}
+
+/**
+ * Earliest place in the slot where the task fits completely, honoring its execution
+ * constraints (start date, weekdays, time window). Returns null if there is none.
+ */
+function findPlacement(slot: SlotCursor, task: CanDoItemDecrypted): Placement | null {
+  const durationMinutes = getTaskDurationMinutes(task);
+
+  for (const interval of slot.free) {
+    for (const window of getExecutionWindows(task, interval.start, interval.end)) {
+      if (differenceInMinutes(window.end, window.start) >= durationMinutes) {
+        return {
+          start: new Date(window.start),
+          end: addMinutes(window.start, durationMinutes),
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 function assignTaskToSlot(
   slot: SlotCursor,
   task: CanDoItemDecrypted,
+  placement: Placement,
 ): TaskAutoplanAssignment {
-  const durationMinutes = getTaskDurationMinutes(task);
-  const start = new Date(slot.cursor);
-  const end = addMinutes(start, durationMinutes);
-  slot.cursor = end;
+  // Take the placed time out of the free intervals (it may split one into two).
+  slot.free = slot.free.flatMap((interval) => {
+    if (
+      !isBefore(placement.start, interval.end) ||
+      !isAfter(placement.end, interval.start)
+    ) {
+      return [interval];
+    }
+
+    const remaining: FreeInterval[] = [];
+    if (isAfter(placement.start, interval.start)) {
+      remaining.push({ start: interval.start, end: placement.start });
+    }
+    if (isBefore(placement.end, interval.end)) {
+      remaining.push({ start: placement.end, end: interval.end });
+    }
+    return remaining;
+  });
 
   return {
     task,
     groupEvent: slot.groupEvent,
-    start,
-    end,
-    durationMinutes,
+    start: placement.start,
+    end: placement.end,
+    durationMinutes: getTaskDurationMinutes(task),
   };
 }
 
 function getSlotRemainingMinutes(slot: SlotCursor): number {
-  return differenceInMinutes(slot.end, slot.cursor);
+  return slot.free.reduce(
+    (total, interval) => total + differenceInMinutes(interval.end, interval.start),
+    0,
+  );
 }
 
 function planImportantFirst(
@@ -213,16 +272,13 @@ function planImportantFirst(
       break;
     }
 
-    const durationMinutes = getTaskDurationMinutes(task);
-    const slot = slots.find(
-      (candidate) => getSlotRemainingMinutes(candidate) >= durationMinutes,
-    );
-
-    if (!slot) {
-      continue;
+    for (const slot of slots) {
+      const placement = findPlacement(slot, task);
+      if (placement) {
+        assignments.push(assignTaskToSlot(slot, task, placement));
+        break;
+      }
     }
-
-    assignments.push(assignTaskToSlot(slot, task));
   }
 
   return assignments;
@@ -231,17 +287,35 @@ function planImportantFirst(
 function pickBestFitTask(
   tasks: CanDoItemDecrypted[],
   allTasks: CanDoItemDecrypted[],
-  remainingMinutes: number,
+  slot: SlotCursor,
   mode: "best-fit" | "balanced",
-): CanDoItemDecrypted | null {
-  const fittingTasks = tasks.filter(
-    (task) => getTaskDurationMinutes(task) <= remainingMinutes,
-  );
+): { task: CanDoItemDecrypted; placement: Placement } | null {
+  const remainingMinutes = getSlotRemainingMinutes(slot);
+  const placements = new Map<string, Placement>();
+  const fittingTasks: CanDoItemDecrypted[] = [];
+
+  for (const task of tasks) {
+    const placement = findPlacement(slot, task);
+    if (placement) {
+      placements.set(task.id, placement);
+      fittingTasks.push(task);
+    }
+  }
 
   if (fittingTasks.length === 0) {
     return null;
   }
 
+  const chosen = rankFittingTasks(fittingTasks, allTasks, remainingMinutes, mode);
+  return { task: chosen, placement: placements.get(chosen.id)! };
+}
+
+function rankFittingTasks(
+  fittingTasks: CanDoItemDecrypted[],
+  allTasks: CanDoItemDecrypted[],
+  remainingMinutes: number,
+  mode: "best-fit" | "balanced",
+): CanDoItemDecrypted {
   if (mode === "best-fit") {
     return fittingTasks.sort((left, right) => {
       const leftGap = remainingMinutes - getTaskDurationMinutes(left);
@@ -288,20 +362,14 @@ function planBySlotPacking(
 
   for (const slot of slots) {
     while (assignments.length < taskCount) {
-      const remainingMinutes = getSlotRemainingMinutes(slot);
-      const chosenTask = pickBestFitTask(
-        remainingTasks,
-        allTasks,
-        remainingMinutes,
-        mode,
-      );
+      const chosen = pickBestFitTask(remainingTasks, allTasks, slot, mode);
 
-      if (!chosenTask) {
+      if (!chosen) {
         break;
       }
 
-      assignments.push(assignTaskToSlot(slot, chosenTask));
-      const chosenIndex = remainingTasks.findIndex((task) => task.id === chosenTask.id);
+      assignments.push(assignTaskToSlot(slot, chosen.task, chosen.placement));
+      const chosenIndex = remainingTasks.findIndex((task) => task.id === chosen.task.id);
       if (chosenIndex >= 0) {
         remainingTasks.splice(chosenIndex, 1);
       }
@@ -347,10 +415,21 @@ export function buildTaskAutoplanPreview(params: {
   }
 
   const assignedTaskIds = new Set(assignments.map((assignment) => assignment.task.id));
+  const unplannedTasks = eligibleTasks.filter((task) => !assignedTaskIds.has(task.id));
+
+  // Constrained tasks that could not be planned and would not fit into any slot even if it were
+  // completely empty - so their execution constraints (not a lack of time) are what keeps them out.
+  const emptySlots = createSlotCursors(availableSlots);
+  const constraintBlockedTasks = unplannedTasks.filter(
+    (task) =>
+      hasExecutionConstraints(task) &&
+      !emptySlots.some((slot) => findPlacement(slot, task) !== null),
+  );
 
   return {
     assignments,
-    unplannedTasks: eligibleTasks.filter((task) => !assignedTaskIds.has(task.id)),
+    unplannedTasks,
+    constraintBlockedTasks,
     eligibleTasks,
     reservationGroups: availableSlots.map((slot) => slot.groupEvent),
     availableSlots,

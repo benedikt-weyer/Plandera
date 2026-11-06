@@ -98,6 +98,7 @@ tasks:
   autoplanNoEligibleTasks: Keine geeigneten Aufgaben für die automatische Planung verfügbar.
   autoplanNoAssignments: Mit dem gewählten Modus passt keine Aufgabe in die verfügbaren Reservierungsbereiche.
   autoplanRemainingTasks: Verbleibende Aufgaben
+  autoplanConstraintBlocked: Übersprungen wegen ihrer Ausführungsbedingungen (Startdatum, Wochentage oder Zeitraum) - kein Reservierungsbereich ist für sie möglich
   applyAutoplan: Auto-Planung anwenden
 
 projects:

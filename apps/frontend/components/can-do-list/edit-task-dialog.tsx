@@ -461,86 +461,6 @@ export default function EditTaskDialog({
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="blockedBy">Blocked By</Label>
-            <Popover open={blockedByOpen} onOpenChange={setBlockedByOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={blockedByOpen}
-                  className="w-full justify-between"
-                  disabled={isLoading}
-                >
-                  {form.watch('blockedBy') ? 
-                    tasks.find(t => t.id === form.watch('blockedBy'))?.content || 'Select a blocking task...' :
-                    'Select a blocking task...'
-                  }
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0">
-                <Command>
-                  <CommandInput placeholder="Search tasks..." className="h-9" />
-                  <CommandList>
-                    <CommandEmpty>No tasks found.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="not blocked"
-                        onSelect={() => {
-                          form.setValue('blockedBy', undefined);
-                          setBlockedByOpen(false);
-                        }}
-                      >
-                        Not blocked
-                        <Check
-                          className={cn(
-                            "ml-auto h-4 w-4",
-                            !form.watch('blockedBy') ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                      </CommandItem>
-                      {tasks
-                        .filter(t => t.id !== task?.id && !t.completed) // Don't show current task or completed tasks
-                        .sort((a, b) => a.content.localeCompare(b.content))
-                        .map(blockingTask => (
-                          <CommandItem
-                            key={blockingTask.id}
-                            value={blockingTask.content}
-                            onSelect={() => {
-                              form.setValue('blockedBy', blockingTask.id);
-                              setBlockedByOpen(false);
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="truncate max-w-64">{blockingTask.content}</span>
-                              {blockingTask.project_id && (
-                                <span className="text-xs text-muted-foreground">
-                                  ({projects.find(p => p.id === blockingTask.project_id)?.name || 'Unknown'})
-                                </span>
-                              )}
-                            </div>
-                            <Check
-                              className={cn(
-                                "ml-auto h-4 w-4",
-                                form.watch('blockedBy') === blockingTask.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                          </CommandItem>
-                        ))
-                      }
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            {form.formState.errors.blockedBy && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.blockedBy.message}
-              </p>
-            )}
-          </div>
-
           {/* Parent Task Section */}
           <div className="space-y-2">
             <Label htmlFor="parentTask">{t('tasks.parentTask')}</Label>
@@ -702,8 +622,88 @@ export default function EditTaskDialog({
 
             <TabsContent value="constraints" className="space-y-5">
               <p className="text-sm text-muted-foreground">
-                Optionally limit when this task can be done. Leave a setting empty for no restriction.
+                Optionally limit when this task can be done, or which task has to be finished first. Leave a setting empty for no restriction.
               </p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="blockedBy">Blocked By</Label>
+                  <Popover open={blockedByOpen} onOpenChange={setBlockedByOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={blockedByOpen}
+                        className="w-full justify-between"
+                        disabled={isLoading}
+                      >
+                        {form.watch('blockedBy') ? 
+                          tasks.find(t => t.id === form.watch('blockedBy'))?.content || 'Select a blocking task...' :
+                          'Select a blocking task...'
+                        }
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0">
+                      <Command>
+                        <CommandInput placeholder="Search tasks..." className="h-9" />
+                        <CommandList>
+                          <CommandEmpty>No tasks found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="not blocked"
+                              onSelect={() => {
+                                form.setValue('blockedBy', undefined);
+                                setBlockedByOpen(false);
+                              }}
+                            >
+                              Not blocked
+                              <Check
+                                className={cn(
+                                  "ml-auto h-4 w-4",
+                                  !form.watch('blockedBy') ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                            {tasks
+                              .filter(t => t.id !== task?.id && !t.completed) // Don't show current task or completed tasks
+                              .sort((a, b) => a.content.localeCompare(b.content))
+                              .map(blockingTask => (
+                                <CommandItem
+                                  key={blockingTask.id}
+                                  value={blockingTask.content}
+                                  onSelect={() => {
+                                    form.setValue('blockedBy', blockingTask.id);
+                                    setBlockedByOpen(false);
+                                  }}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="truncate max-w-64">{blockingTask.content}</span>
+                                    {blockingTask.project_id && (
+                                      <span className="text-xs text-muted-foreground">
+                                        ({projects.find(p => p.id === blockingTask.project_id)?.name || 'Unknown'})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4",
+                                      form.watch('blockedBy') === blockingTask.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))
+                            }
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {form.formState.errors.blockedBy && (
+                    <p className="text-sm text-destructive">
+                      {form.formState.errors.blockedBy.message}
+                    </p>
+                  )}
+                </div>
 
               <div className="space-y-2">
                 <Label htmlFor="fromDate">Possible from</Label>

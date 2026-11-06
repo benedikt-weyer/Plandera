@@ -1,4 +1,5 @@
 'use client';
+import { isTaskDoableToday } from '@/utils/can-do-list/execution-constraints';
 
 import { CanDoItemDecrypted, ProjectDecrypted, CreateCanDoItemDecryptedRequest, UpdateCanDoItemDecryptedRequest, CreateProjectDecryptedRequest, UpdateProjectDecryptedRequest, TaskExecutionConstraints } from '@/utils/api/types';
 import { TaskService } from '@/services/tasks/task-service';
@@ -404,7 +405,7 @@ export class CanDoListPageService {
       
       // Filter for high-priority or due-soon tasks
       return tasks.filter(task => 
-        !task.completed && (
+        !task.completed && isTaskDoableToday(task, now) && (
           (task.impact && task.impact >= 4) ||
           (task.urgency && task.urgency >= 4) ||
           (task.due_date && new Date(task.due_date) <= tomorrow) ||

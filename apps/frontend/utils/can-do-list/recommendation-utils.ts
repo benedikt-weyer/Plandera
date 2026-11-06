@@ -3,6 +3,7 @@
  */
 
 import { CanDoItemDecrypted } from '../api/types';
+import { isTaskDoableToday } from './execution-constraints';
 
 /**
  * Calculate a recommendation score for a task based on impact, urgency, due date, and blocking relationships
@@ -89,11 +90,13 @@ export function calculateRecommendationScore(task: CanDoItemDecrypted, allTasks:
  * Get recommended tasks sorted by recommendation score
  * @param tasks - All tasks to consider
  * @param limit - Maximum number of tasks to return (default: 20)
+ * @param now - Reference time (default: current time); used for the execution constraints check
  * @returns Top recommended tasks sorted by score (highest first)
  */
-export function getRecommendedTasks(tasks: CanDoItemDecrypted[], limit: number = 20): CanDoItemDecrypted[] {
-  // Only consider active (non-completed) tasks
-  const activeTasks = tasks.filter(task => !task.completed);
+export function getRecommendedTasks(tasks: CanDoItemDecrypted[], limit: number = 20, now: Date = new Date()): CanDoItemDecrypted[] {
+  // Only consider active (non-completed) tasks that can still be done today
+  // (execution constraints: start date reached, weekday allowed, time window not over yet)
+  const activeTasks = tasks.filter(task => !task.completed && isTaskDoableToday(task, now));
   
   // Calculate scores and sort
   const tasksWithScores = activeTasks.map(task => ({

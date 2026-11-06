@@ -98,6 +98,7 @@ tasks:
   autoplanNoEligibleTasks: No eligible tasks are available for autoplaning.
   autoplanNoAssignments: No tasks fit into the available reservation spaces with the selected mode.
   autoplanRemainingTasks: Remaining tasks
+  autoplanConstraintBlocked: Skipped because of their execution constraints (start date, weekdays or time period) - no reservation space is possible for them
   applyAutoplan: Apply Autoplan
 
 projects:

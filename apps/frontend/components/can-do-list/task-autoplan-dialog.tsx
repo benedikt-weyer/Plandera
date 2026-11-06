@@ -276,6 +276,29 @@ export function TaskAutoplanDialog({
                 </div>
               </div>
             ) : null}
+
+            {preview.constraintBlockedTasks.length > 0 ? (
+              <div className="rounded-lg border border-dashed border-amber-500/50 p-4">
+                <div className="mb-2 text-sm font-medium">
+                  {t("tasks.autoplanConstraintBlocked")}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {preview.constraintBlockedTasks.slice(0, 8).map((task) => (
+                    <span
+                      key={task.id}
+                      className="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-100"
+                    >
+                      {task.content}
+                    </span>
+                  ))}
+                  {preview.constraintBlockedTasks.length > 8 ? (
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                      +{preview.constraintBlockedTasks.length - 8}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
