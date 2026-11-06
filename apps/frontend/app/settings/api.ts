@@ -399,9 +399,13 @@ export async function importDecryptedUserData(data: DecryptedExportData): Promis
     }
   }
 
+  // Tasks without any content (legacy records that only kept e.g. `completed`) have
+  // nothing to restore and would show up as blank rows, so they are skipped.
+  const tasks = data.data.tasks.filter((task) => typeof task.content === 'string' && task.content.length > 0);
+
   // Tasks: create with project_id already remapped; blocking/subtask relationships are
   // wired up afterward since they can reference tasks created later in the same import.
-  for (const task of data.data.tasks) {
+  for (const task of tasks) {
     const result = await backend.canDoList.create({
       content: task.content,
       completed: task.completed,
@@ -416,7 +420,7 @@ export async function importDecryptedUserData(data: DecryptedExportData): Promis
     });
     if (result.data) taskIdMap.set(task.id, result.data.id);
   }
-  for (const task of data.data.tasks) {
+  for (const task of tasks) {
     const newId = taskIdMap.get(task.id);
     if (!newId) continue;
     const updates: { id: string; blocked_by?: string; parent_task_id?: string } = { id: newId };

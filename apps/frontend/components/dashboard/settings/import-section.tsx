@@ -162,7 +162,8 @@ export function ImportSection({}: ImportSectionProps) {
     if (!Array.isArray(calendarEvents)) errors.push('Invalid calendar events data - must be an array');
 
     // Version compatibility
-    if (data.version !== '1.0.0') {
+    // Older exports wrote "1.0", current ones "1.0.0": same format.
+    if (data.version !== '1.0.0' && data.version !== '1.0') {
       warnings.push(`Version mismatch: importing ${data.version}, current version is 1.0.0`);
     }
 
@@ -178,9 +179,12 @@ export function ImportSection({}: ImportSectionProps) {
       
       if (isDecrypted) {
         // Check if decrypted tasks have required fields
-        const invalidTasks = tasks.filter((task: any) => !task.content);
-        if (invalidTasks.length > 0) {
-          errors.push(`${invalidTasks.length} tasks are missing required content field`);
+        // Older versions could leave tasks whose stored data holds no text at all
+        // (e.g. just `completed`). There is nothing to restore, so they are skipped
+        // on import (see importDecryptedUserData) rather than blocking the import.
+        const emptyTasks = tasks.filter((task: any) => !task.content);
+        if (emptyTasks.length > 0) {
+          warnings.push(`${emptyTasks.length} tasks have no content and will be skipped`);
         }
       } else {
         // Check if encrypted tasks have required fields
