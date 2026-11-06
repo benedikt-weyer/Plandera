@@ -6,9 +6,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: process.env.SKIP_TYPE_CHECK === '1',
   },
-  eslint: {
-    ignoreDuringBuilds: process.env.SKIP_TYPE_CHECK === '1',
-  },
   /* config options here */
   
 };
